@@ -125,6 +125,51 @@ def test_architect_runner_composes_claude_prompt_from_pm_envelope(tmp_path):
     assert len(sent_prompt) < 2600
 
 
+def test_runner_falls_back_to_codex_command_on_claude_quota_exhaustion(monkeypatch, tmp_path):
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    prompt = workdir / "prompt.md"
+    prompt.write_text("hello", encoding="utf-8")
+    artifact = workdir / "artifact.md"
+    manifest = workdir / "manifest.json"
+    primary = workdir / "primary_claude.py"
+    fallback = workdir / "fallback_codex.py"
+    primary.write_text(
+        "import sys\n"
+        "print('Claude usage limit reached: token quota exhausted', file=sys.stderr)\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+    fallback.write_text("print('codex artifact')\n", encoding="utf-8")
+    monkeypatch.setenv("HERMES_PM_CLAUDE_FALLBACK_COMMAND", f"python3 {fallback}")
+
+    result = runner.run_delegation(
+        mode="implementer",
+        plan_id="plan_fallback",
+        task_id="t_fallback",
+        workdir=str(workdir),
+        command=f"python3 {primary}",
+        prompt_file=str(prompt),
+        output_format="implementation",
+        artifact_path=str(artifact),
+        manifest_path=str(manifest),
+        readonly=False,
+        timeout=30,
+    )
+
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert result["ok"] is True
+    assert artifact.read_text(encoding="utf-8").strip() == "codex artifact"
+    assert data["status"] == "completed"
+    assert data["exit_code"] == 0
+    assert data["fallback"]["used"] is True
+    assert data["fallback"]["reason"] == "claude_quota_exhausted"
+    assert data["fallback"]["primary_exit_code"] == 0
+    assert any("fallback_codex.py" in part for part in data["fallback"]["command"])
+    log_text = manifest.with_suffix(".runner.log").read_text(encoding="utf-8")
+    assert "fallback start reason=claude_quota_exhausted" in log_text
+
+
 def test_runner_records_failed_command_without_successful_status(tmp_path):
     workdir = tmp_path / "project"
     workdir.mkdir()

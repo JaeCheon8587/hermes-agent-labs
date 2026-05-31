@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shlex
 import subprocess
@@ -89,6 +90,28 @@ def _run_command(argv: list[str], prompt: str, root: Path, timeout: int) -> tupl
         check=False,
     )
     return completed, time.monotonic() - start
+
+
+def _detect_claude_quota_exhaustion(completed: subprocess.CompletedProcess[str]) -> bool:
+    text = f"{completed.stdout or ''}\n{completed.stderr or ''}".lower()
+    if not text.strip():
+        return False
+    markers = (
+        "usage limit",
+        "quota",
+        "credit balance",
+        "credits exhausted",
+        "token quota",
+        "tokens exhausted",
+        "rate limit exceeded",
+        "billing",
+        "subscription",
+    )
+    return any(marker in text for marker in markers) and any(provider in text for provider in ("claude", "anthropic", "token", "quota"))
+
+
+def _fallback_command() -> str:
+    return os.environ.get("HERMES_PM_CLAUDE_FALLBACK_COMMAND", "").strip()
 
 
 def _prepare_command_argv(command: str, *, readonly: bool) -> list[str]:
@@ -598,6 +621,39 @@ def run_delegation(
         _write_runner_debug_log(manifest, f"command timed out timeout={timeout_seconds}")
     if not timed_out:
         _write_runner_debug_log(manifest, f"command finished rc={completed.returncode} duration={round(duration, 3)} stdout_chars={len(completed.stdout or '')} stderr_chars={len(completed.stderr or '')}")
+    fallback_info: dict[str, Any] | None = None
+    fallback_command = _fallback_command()
+    if not timed_out and fallback_command and _detect_claude_quota_exhaustion(completed):
+        primary_completed = completed
+        primary_duration = duration
+        fallback_argv = _prepare_command_argv(fallback_command, readonly=readonly)
+        if fallback_argv:
+            _write_runner_debug_log(manifest, f"fallback start reason=claude_quota_exhausted argv={fallback_argv}")
+            try:
+                completed, fallback_duration = _run_command(fallback_argv, prompt, root, timeout)
+                duration = primary_duration + fallback_duration
+                _write_runner_debug_log(manifest, f"fallback finished rc={completed.returncode} duration={round(fallback_duration, 3)} stdout_chars={len(completed.stdout or '')} stderr_chars={len(completed.stderr or '')}")
+            except subprocess.TimeoutExpired as exc:
+                fallback_duration = float(exc.timeout or timeout or 0)
+                duration = primary_duration + fallback_duration
+                completed = subprocess.CompletedProcess(
+                    fallback_argv,
+                    124,
+                    stdout=_timeout_output_to_text(exc.output),
+                    stderr=_timeout_output_to_text(exc.stderr),
+                )
+                _write_runner_debug_log(manifest, f"fallback timed out timeout={int(exc.timeout or timeout or 0)}")
+            fallback_info = {
+                "used": True,
+                "reason": "claude_quota_exhausted",
+                "primary_command": argv,
+                "primary_exit_code": primary_completed.returncode,
+                "primary_stdout_excerpt": _compact_text_excerpt(primary_completed.stdout or "", max_chars=500, max_lines=12),
+                "primary_stderr_excerpt": _compact_text_excerpt(primary_completed.stderr or "", max_chars=500, max_lines=12),
+                "command": fallback_argv,
+                "exit_code": completed.returncode,
+            }
+            argv = fallback_argv
     status = "timeout" if timed_out else ("completed" if completed.returncode == 0 else "failed")
 
     artifact.parent.mkdir(parents=True, exist_ok=True)
@@ -672,6 +728,8 @@ def run_delegation(
         data["prompt_composition"] = "architect_runner"
     if timed_out:
         data["timeout_seconds"] = timeout_seconds or timeout
+    if fallback_info is not None:
+        data["fallback"] = fallback_info
     if artifact_validation is not None:
         data["artifact_contract_validation"] = artifact_validation
     if repair_result is not None:

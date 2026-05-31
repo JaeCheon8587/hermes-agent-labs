@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PM Workflow Productization Phase 1 Completion</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #121933;
+      --panel-2: #182244;
+      --text: #e9eefc;
+      --muted: #aab6d3;
+      --accent: #7cc4ff;
+      --ok: #5dd39e;
+      --warn: #ffd166;
+      --border: #2a3766;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      background: linear-gradient(180deg, #0b1020 0%, #0f1730 100%);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .wrap {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 32px 20px 56px;
+    }
+    .hero, section {
+      background: rgba(18, 25, 51, 0.92);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+    }
+    .hero { margin-bottom: 18px; }
+    section { margin-top: 18px; }
+    h1, h2, h3 { margin: 0 0 12px; }
+    h1 { font-size: 30px; }
+    h2 { font-size: 22px; color: var(--accent); }
+    h3 { font-size: 17px; color: var(--text); }
+    p, li { color: var(--muted); }
+    .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+    .chip {
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .card {
+      padding: 16px;
+      border-radius: 14px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+    }
+    .ok { color: var(--ok); }
+    .warn { color: var(--warn); }
+    ul { margin: 10px 0 0 20px; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background: rgba(255,255,255,0.06);
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #f7fbff;
+    }
+    pre {
+      margin: 12px 0 0;
+      padding: 14px;
+      border-radius: 12px;
+      background: #0a1128;
+      border: 1px solid var(--border);
+      overflow-x: auto;
+      color: #dfe8ff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { color: var(--text); background: rgba(255,255,255,0.04); }
+    tr:last-child td { border-bottom: none; }
+    .footer-note {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 12px;
+    }
+    .callout {
+      margin-top: 14px;
+      padding: 16px;
+      border-radius: 14px;
+      background: rgba(124, 196, 255, 0.08);
+      border: 1px solid rgba(124, 196, 255, 0.28);
+    }
+    .mermaid-wrap {
+      margin-top: 14px;
+      padding: 16px;
+      border-radius: 14px;
+      background: #0d1530;
+      border: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    .mermaid {
+      min-width: 760px;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: 180px 1fr;
+      gap: 10px 14px;
+      margin-top: 12px;
+    }
+    .kv div:nth-child(odd) {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .kv div:nth-child(even) {
+      color: var(--muted);
+    }
+    .tabs {
+      margin-top: 14px;
+    }
+    .tab-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .tab-button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .tab-button[aria-selected="true"] {
+      background: rgba(124, 196, 255, 0.12);
+      border-color: var(--accent);
+      color: #f7fbff;
+    }
+    .tab-panel {
+      display: none;
+      margin-top: 14px;
+      padding: 18px;
+      border-radius: 14px;
+      background: #0d1530;
+      border: 1px solid var(--border);
+    }
+    .tab-panel.active {
+      display: block;
+    }
+    .uml-note {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hero">
+      <h1>PM Workflow Productization Phase 1 Completion</h1>
+      <p>
+        Hermes 기반 PM 중심 staged workflow의 1차 제품화 작업이 완료되었음을 기록한다.
+        이 문서는 개념 검증이 아니라, 실제 라이브 스모크 런과 코드/테스트 기준으로 어떤 기능이 안정화되었는지 정리한다.
+      </p>
+      <div class="chips">
+        <span class="chip">Date: 2026-05-23</span>
+        <span class="chip">Status: Phase 1 Complete</span>
+        <span class="chip">Validated Runs: v7, v9, v10</span>
+        <span class="chip">Focus: Core workflow hardening</span>
+      </div>
+    </div>
+
+    <section>
+      <h2>Executive Summary</h2>
+      <p>
+        현재 시스템은 <strong>사용자 → PM → architect → design approval → implementer → reviewer → final → PM 보고</strong>
+        구조를 실제로 수행할 수 있다. v10에서는 architect 완료 후 설계 승인 요청 알림이 자동 발송되는지까지 재검증되었고,
+        최종 완료 보고도 정상적으로 도착했다. 따라서 PM 중심 staged workflow의 핵심 메커니즘은 실사용 가능한 수준에 가까워졌다.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3 class="ok">완료된 핵심 목표</h3>
+          <ul>
+            <li>plan-only 생성</li>
+            <li>design gate 강제</li>
+            <li>follow-up task 자동 생성</li>
+            <li>review/final evidence 생성</li>
+            <li>PM 최종 보고 자동화</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="ok">이번 1차에서 실제 고정한 문제</h3>
+          <ul>
+            <li>core phase transition 누락</li>
+            <li>scope phase sync 의존성</li>
+            <li>completion notifier false positive</li>
+            <li>explicit contract schema mismatch</li>
+            <li>design approval notification 누락</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>What Was Implemented in Phase 1</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>영역</th>
+            <th>적용 내용</th>
+            <th>결과</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Core transition</td>
+            <td>
+              <code>architect → awaiting_design_approval</code>,
+              <code>implementer → reviewer scope export</code>,
+              <code>reviewer → final scope export</code>
+              를 workflow core와 Kanban completion path에 통합.
+            </td>
+            <td class="ok">임시 수동 개입 없이 phase 전이가 가능해짐</td>
+          </tr>
+          <tr>
+            <td>Contract hardening</td>
+            <td>
+              explicit contract validator 추가.
+              <code>architect / implementer / reviewer / final</code> canonical key와
+              상대 경로 deliverable 형식을 강제.
+            </td>
+            <td class="ok">잘못된 schema를 가진 plan을 생성 단계에서 차단 가능</td>
+          </tr>
+          <tr>
+            <td>Stale plan handling</td>
+            <td>
+              superseded / archived 처리 기반과 notifier skip 규칙 추가.
+            </td>
+            <td class="ok">오래된 contaminated plan이 user-facing 알림을 오염시키는 문제 완화</td>
+          </tr>
+          <tr>
+            <td>Completion reporting</td>
+            <td>
+              PM completion notifier 문구와 검증 흐름 정리.
+            </td>
+            <td class="ok">오탐 감소, 최종 보고 품질 개선</td>
+          </tr>
+          <tr>
+            <td>Design-ready notification</td>
+            <td>
+              notifier를 send-only 중심으로 조정하고,
+              <code>awaiting_design_approval</code> 상태에서도 정상 발송되도록 수정.
+            </td>
+            <td class="ok">v10에서 설계 승인 요청 자동 발송 검증 성공</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>핵심 원리</strong><br />
+        이 시스템의 본질은 “프롬프트로 권고”가 아니라 “Python이 상태와 전이를 강제”하는 구조다.
+        PM이 자연어 계획을 제안하더라도, 실제 실행 가능 여부는 workflow contract, phase별 allowed path,
+        evidence 요구사항, Kanban task lineage, final validation 규칙이 함께 통과할 때만 성립한다.
+      </div>
+    </section>
+
+    <section>
+      <h2>Core Workflow Operating Principle</h2>
+      <p>
+        Phase 1에서 구현한 코어는 하나의 "AI 팀 대화"를 흉내 내는 구조가 아니라,
+        <strong>plan state + Kanban task state + workflow contract + evidence artifact</strong>를 함께 사용하는
+        결정적 workflow engine에 가깝다. 모델은 각 phase의 작업을 수행하지만, phase를 건너뛰거나,
+        승인 없이 구현하거나, evidence 없이 완료 처리하는 것은 Python 로직이 막는다.
+      </p>
+      <div class="kv">
+        <div>진입점</div><div>사용자 요청은 PM plan으로 먼저 수집되고, 바로 구현으로 가지 않는다.</div>
+        <div>상태 저장</div><div><code>pm_plans.json</code>이 plan-level source of truth 역할을 수행한다.</div>
+        <div>실행 단위</div><div>실제 작업 수행은 Kanban task로 분해되어 profile별 worker에게 할당된다.</div>
+        <div>제약 조건</div><div><code>contract.json</code>이 deliverable, allowed path, evidence, phase graph를 명시한다.</div>
+        <div>완료 판정</div><div>final summary만으로 끝나지 않고 deliverable/evidence/lineage 검증이 선행된다.</div>
+      </div>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+    U["User request"] --> PM["PM creates plan"]
+    PM --> PSTATE["Plan state saved: pm_plans.json"]
+    PSTATE --> CONTRACT["Workflow contract materialized"]
+    CONTRACT --> APPROVAL{"User plan approval"}
+    APPROVAL -- "no" --> WAIT1["awaiting_approval"]
+    APPROVAL -- "yes" --> ARCH["Architect task only"]
+    ARCH --> ARCHDONE{"architect done?"}
+    ARCHDONE -- "yes" --> DESIGNREADY["awaiting_design_approval"]
+    DESIGNREADY --> DAPPROVAL{"User design approval"}
+    DAPPROVAL -- "no" --> WAIT2["design revision or hold"]
+    DAPPROVAL -- "yes" --> IMPL["Implementer task"]
+    IMPL --> REVIEW["Reviewer task"]
+    REVIEW --> FINAL["PM final task"]
+    FINAL --> VALIDATE["Completion validator"]
+    VALIDATE --> DONE["Final report and notifier"]
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Python / State Machine / Contract / Evidence</h2>
+      <p>
+        문서에서 반복해서 나오는 <code>Python/state machine/contract/evidence</code>는 단순 슬로건이 아니라,
+        실제로 역할이 분리된 네 개의 제어층을 뜻한다. 이 구조 때문에 PM workflow는 “모델이 알아서 잘 해주길 기대하는 시스템”이 아니라
+        “실행 가능 상태만 다음 단계로 전이시키는 시스템”이 된다.
+      </p>
+      <div class="grid">
+        <div class="card">
+          <h3>1. Python</h3>
+          <p>
+            Python 코드는 실제 집행자다. plan 생성, phase 전이, validator, notifier, Kanban completion hook이 모두 여기 있다.
+            모델이 무엇을 말하든, Python이 허용하지 않으면 다음 phase로 넘어가지 못한다.
+          </p>
+        </div>
+        <div class="card">
+          <h3>2. State Machine</h3>
+          <p>
+            plan은 <code>awaiting_approval</code>, <code>design_in_progress</code>, <code>awaiting_design_approval</code>,
+            <code>executed</code>, <code>completed</code>, <code>superseded</code> 같은 상태를 가진다.
+            각 상태는 “사용자가 무엇을 해야 하는지”와 “어떤 worker task를 만들 수 있는지”를 결정한다.
+          </p>
+        </div>
+        <div class="card">
+          <h3>3. Contract</h3>
+          <p>
+            contract는 자연어 요구사항을 runtime 규칙으로 변환한 결과다.
+            대표 필드는 <code>expected_deliverables</code>, <code>phase_allowed_paths</code>,
+            <code>required_tasks_by_phase</code>, <code>required_evidence_by_phase</code>다.
+          </p>
+        </div>
+        <div class="card">
+          <h3>4. Evidence</h3>
+          <p>
+            evidence는 “진짜로 그 phase가 수행되었는가”를 증명하는 산출물이다.
+            design, implementation, verification, final report artifact가 여기에 속한다.
+            completion은 evidence가 없으면 통과하지 않는다.
+          </p>
+        </div>
+      </div>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TB
+    subgraph ARCH["Architecture layers: what the system uses"]
+      A["Plan state machine"]
+      B["Contract rules"]
+      C["Worker execution scope"]
+      D["Evidence artifacts"]
+      E["Completion validation"]
+      F["User-facing PM report"]
+      X["Reject or blocked"]
+      A --> B --> C --> D --> E --> F
+      B -. "invalid phase or path" .-> X
+      D -. "missing evidence" .-> X
+    end
+        </div>
+      </div>
+      <div class="callout">
+        <strong>이 다이어그램의 의미</strong><br />
+        위 그림은 completion hook 내부 순서도가 아니다. 이것은 PM workflow가 의존하는 상위 제어 레이어를 보여주는 아키텍처 다이어그램이다.
+        즉 <code>Plan state machine</code>, <code>Contract rules</code>, <code>Worker execution scope</code>,
+        <code>Evidence artifacts</code>, <code>Completion validation</code>는 훅이 읽고 갱신하는 대상이지,
+        훅 함수 내부에서 한 줄씩 실행되는 절차를 뜻하지 않는다.
+      </div>
+      <div class="callout">
+        <strong>왜 중요한가</strong><br />
+        동일한 모델이라도 prompt만 바꾸면 행동이 흔들릴 수 있다. 반면 이 구조에서는
+        <code>contract</code>가 파일 경로와 evidence 의무를 제한하고, <code>state machine</code>이 승인 없는 전이를 막고,
+        <code>completion validator</code>가 산출물/증빙 부재를 최종 차단한다.
+      </div>
+    </section>
+
+    <section>
+      <h2>Detailed Core Mechanics</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Plan layer</h3>
+          <ul>
+            <li>PM은 먼저 plan을 제안한다.</li>
+            <li>plan에는 task graph와 contract가 묶인다.</li>
+            <li>사용자 승인 전에는 실행 task를 만들지 않거나 architect만 만든다.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Kanban layer</h3>
+          <ul>
+            <li>실행은 Kanban task 단위로 분해된다.</li>
+            <li>architect / implementer / reviewer / final lineage가 남는다.</li>
+            <li>worker 완료/blocked 이벤트가 다음 phase 전이의 입력이 된다.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Scope layer</h3>
+          <ul>
+            <li><code>.soul/approved_scope.json</code>는 현재 actionable phase snapshot이다.</li>
+            <li>implementer 완료 시 reviewer scope가, reviewer 완료 시 final scope가 export된다.</li>
+            <li>scope mismatch가 나면 worker는 blocked 되고 Hermes가 알림을 보낸다.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Validation layer</h3>
+          <ul>
+            <li>reviewer completion은 verdict schema를 만족해야 한다.</li>
+            <li>final task는 <code>reviewer_result.verdict</code>, <code>reviewer_result.scope_status</code>, <code>reviewer_result.evidence</code>를 다시 검사한다.</li>
+            <li>reviewer verdict가 blocked이거나 scope가 out-of-scope면 final handoff 자체가 생성되지 않는다.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3>어디서 강제되는가: 실제 코드 레벨 enforcement</h3>
+        <p>
+          이 문서에서 말하는 core transition은 추상 개념이 아니라, 특정 completion hook와 PM workflow 함수에서 강제된다.
+          핵심은 <code>task done</code> 이벤트가 발생했을 때 Python이 완료된 task를 하나의 입력 payload처럼 읽고,
+          그 task의 metadata를 기반으로 미리 정의된 transition callback을 dispatch한다는 점이다.
+        </p>
+        <div class="kv">
+          <div>Event source</div><div>worker가 task를 <code>done</code> 처리하면 Kanban completion path가 즉시 실행된다.</div>
+          <div>Hook entry</div><div><code>hermes_cli/kanban_db.py</code>에서 completion 후 <code>handle_completed_pm_workflow_task(conn, task_id)</code>를 호출한다.</div>
+          <div>Payload lookup</div><div><code>_find_plan_for_task()</code>가 <code>task_id</code>를 기준으로 해당 task의 plan, key, phase, follow-up lineage를 역추적한다.</div>
+          <div>Dispatch key</div><div>핵심 분기 기준은 자연어가 아니라 <code>phase == architect|implementer|reviewer</code> 같은 deterministic metadata다.</div>
+          <div>Architect callback</div><div><code>awaiting_design_approval</code> 상태 전이, <code>design_status</code>/<code>design_summary</code>/<code>design_ready_at</code> 기록, contract 재기록.</div>
+          <div>Implementer callback</div><div><code>_export_approved_scope(plan, &quot;reviewer&quot;, reviewer_task_id, ...)</code>로 reviewer phase snapshot 생성.</div>
+          <div>Reviewer callback</div><div>reviewer metadata(<code>verdict</code>, <code>scope_status</code>, <code>evidence</code>, <code>changed_files</code>)를 읽고 final handoff 허용 여부를 결정한다.</div>
+          <div>Final gate</div><div>final completion 시 <code>approved_scope.json</code>의 <code>reviewer_result</code>를 다시 읽어 <code>verdict=pass</code>, <code>scope_status=within_allowed_paths</code>, non-empty <code>evidence</code>를 강제한다.</div>
+        </div>
+      </div>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart TD
+    E["Task done event"] --> H["Completion hook fires"]
+    H --> L["Load task metadata by task_id"]
+    L --> R["Resolve plan, key, phase, lineage"]
+    R --> D{"Dispatch by phase"}
+    D -- "architect" --> C1["Run architect callback"]
+    D -- "implementer" --> C2["Run implementer callback"]
+    D -- "reviewer" --> C3["Run reviewer callback"]
+    D -- "other" --> C4["No transition callback"]
+    C1 --> U1["Update plan state and design fields"]
+    C2 --> U2["Export reviewer approved_scope"]
+    C3 --> G{"Reviewer verdict gate"}
+    G -- "pass + within scope" --> U3["Export final approved_scope with reviewer_result"]
+    G -- "blocked or out-of-scope" --> U5["Mark review_status=blocked and stop final handoff"]
+    C4 --> U4["Return without phase transition"]
+    U1 --> S["Persist pm_plans.json"]
+    U2 --> S
+    U3 --> S
+    U4 --> S
+    U5 --> S
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3>Reviewer verdict schema + final handoff gate</h3>
+        <p>
+          reviewer는 자유 텍스트 요약만 남기면 안 된다. completion metadata에 최소 <code>verdict</code>,
+          <code>summary</code>, <code>evidence</code>, <code>changed_files</code>, <code>scope_status</code>가 있어야 하며,
+          <code>blocked</code> verdict일 때는 <code>blocked_reason</code>도 필요하다.
+          이 구조화된 reviewer_result가 final phase의 입력 계약이 된다.
+        </p>
+        <div class="kv">
+          <div>Reviewer schema</div><div><code>verdict ∈ {pass, concern, blocked}</code>, non-empty <code>evidence</code>, scoped <code>changed_files</code>, normalized <code>scope_status</code>.</div>
+          <div>Pass path</div><div>reviewer verdict가 <code>pass</code>이고 <code>scope_status == within_allowed_paths</code>이면 <code>approved_scope.json</code>에 <code>reviewer_result</code>를 싣고 final phase를 export한다.</div>
+          <div>Blocked path</div><div>reviewer verdict가 <code>blocked</code>이거나 <code>scope_status == out_of_scope</code>이면 PM은 <code>review_status=blocked</code>로 기록하고 final handoff를 만들지 않는다.</div>
+          <div>Final validator</div><div>final task completion 시 Hermes는 <code>reviewer_result.verdict</code>, <code>reviewer_result.scope_status</code>, <code>reviewer_result.evidence</code>를 다시 읽고, 이어서 <code>report_summary</code>, <code>user_report</code>, <code>delivered_artifacts</code>, <code>open_risks</code> 기반 final report schema도 검증한다. 또한 <code>required_artifacts</code> 포함 여부, 각 delivered artifact의 실제 파일 존재, 그리고 최종 report artifact 안의 필수 섹션(<code># Final Report</code>, <code>## Summary</code>, <code>## Delivered Artifacts</code>, <code>## Open Risks</code>) 존재까지 확인한다.</div>
+        </div>
+      </div>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+flowchart LR
+    R1["Reviewer completion"] --> R2["Validate verdict schema"]
+    R2 --> G{"verdict gate"}
+    G -- "pass + within_allowed_paths" --> P1["Write reviewer_result into final approved_scope"]
+    P1 --> P2["PM final task can run"]
+    G -- "blocked / out_of_scope" --> B1["Set review_status=blocked"]
+    B1 --> B2["Do not export final scope"]
+    P2 --> F1["Final completion"]
+    F1 --> F2["Re-check reviewer_result + final report schema + artifact files + report sections"]
+    F2 --> F3["Emit user-facing PM report"]
+        </div>
+      </div>
+      <div class="mermaid-wrap">
+        <div class="mermaid">
+sequenceDiagram
+    participant User
+    participant PM
+    participant Plan as Plan Store
+    participant Worker as backend-specialist
+    participant Scope as approved_scope.json
+    participant Validator as Final Validator
+
+    User->>PM: request
+    PM->>Plan: create plan + contract
+    User->>PM: approve plan
+    PM->>Worker: architect task
+    Worker-->>Plan: design evidence + done
+    PM-->>User: design approval request
+    User->>PM: approve design
+    PM->>Worker: implementer task
+    Worker-->>Scope: implementation scope consumed
+    Worker-->>Plan: implementation done
+    PM->>Worker: reviewer task
+    Worker-->>Plan: verdict schema + verification evidence + done
+    alt reviewer verdict pass and within scope
+        PM->>Scope: export final approved_scope + reviewer_result
+        PM->>Worker: final PM task
+        Worker-->>Validator: final summary request
+        Validator-->>Plan: re-check reviewer_result + final report schema + artifact files + sections
+        PM-->>User: final report
+    else reviewer blocked or out-of-scope
+        PM-->>Plan: mark review_status=blocked
+        PM-->>User: blocked report / revision required
+    end
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>PM / Reviewer Developer Tabs</h2>
+      <p>
+        아래 탭은 운영 관점이 아니라 구현 관점 문서다. PM과 Reviewer가 각각 어떤 입력을 읽고,
+        어떤 상태 전이와 산출물을 만들며, 어느 함수에서 품질 게이트가 강제되는지 분리해서 설명한다.
+      </p>
+      <div class="tabs" data-tabs>
+        <div class="tab-buttons" role="tablist" aria-label="PM workflow developer tabs">
+          <button class="tab-button" type="button" role="tab" id="tab-pm" aria-controls="panel-pm" aria-selected="true">PM Tab</button>
+          <button class="tab-button" type="button" role="tab" id="tab-reviewer" aria-controls="panel-reviewer" aria-selected="false">Reviewer Tab</button>
+        </div>
+
+        <div class="tab-panel active" id="panel-pm" role="tabpanel" aria-labelledby="tab-pm">
+          <h3>PM 동작 메커니즘</h3>
+          <p>
+            PM은 코드를 직접 읽는 구현자가 아니라, plan/contract/approved-scope를 관리하는 orchestrator다.
+            핵심 책임은 사용자 요청을 staged workflow로 번역하고, 각 phase의 worker handoff가 유효한지 Python validator로 강제하는 것이다.
+          </p>
+          <div class="kv">
+            <div>입력</div><div>사용자 요청, 기존 <code>pm_plans.json</code>, workflow contract, 이전 phase metadata, reviewer_result snapshot</div>
+            <div>주요 산출물</div><div>plan record, Kanban task graph, <code>.soul/approved_scope.json</code>, final structured report metadata</div>
+            <div>핵심 함수</div><div><code>pm_workflow_tool.py</code>의 plan/contract builder, <code>kanban_db.py</code> completion hook, final validator</div>
+            <div>강제 규칙</div><div>승인 없는 phase 진입 금지, allowed path 이탈 차단, reviewer blocked/out-of-scope 시 final handoff 금지</div>
+            <div>사용자 접점</div><div>plan approval 요청, design approval 요청, final report 전달</div>
+          </div>
+          <div class="mermaid-wrap">
+            <div class="mermaid">
+flowchart TD
+    U1["User request"] --> P1["Create plan draft"]
+    P1 --> P2["Save plan state"]
+    P2 --> P3["Build workflow contract"]
+    P3 --> G1{"Plan approved"}
+    G1 -- "yes" --> A1["Create architect task"]
+    G1 -- "no" --> W1["Wait for approval"]
+    A1 --> H1["Architect task done"]
+    H1 --> D1["Set design approval state"]
+    D1 --> G2{"Design approved"}
+    G2 -- "yes" --> I1["Create implementer task"]
+    G2 -- "no" --> W2["Hold or revise design"]
+    I1 --> I2["Implementer task done"]
+    I2 --> S1["Export reviewer scope"]
+    S1 --> R1["Create reviewer task"]
+    R1 --> R2["Reviewer task done"]
+    R2 --> G3{"Reviewer gate"}
+    G3 -- "pass" --> F1["Export final scope"]
+    G3 -- "blocked" --> B1["Stop final handoff"]
+    F1 --> F2["Create final PM task"]
+    F2 --> F3["Validate final report"]
+    F3 --> U2["Send final report"]
+            </div>
+          </div>
+          <div class="mermaid-wrap">
+            <div class="mermaid">
+sequenceDiagram
+    participant User
+    participant PM
+    participant Plans as PlansStore
+    participant Contract
+    participant Kanban
+    participant Scope
+    participant FinalGate
+
+    User->>PM: Request work
+    PM->>Plans: Save draft plan
+    PM->>Contract: Build contract
+    Contract-->>PM: Return phase rules
+    PM-->>User: Ask plan approval
+    User->>PM: Approve plan
+    PM->>Kanban: Create architect task
+    Kanban-->>PM: Architect done
+    PM->>Plans: Set design approval state
+    PM-->>User: Ask design approval
+    User->>PM: Approve design
+    PM->>Kanban: Create implementer task
+    Kanban-->>PM: Implementer done
+    PM->>Scope: Export reviewer scope
+    PM->>Kanban: Create reviewer task
+    Kanban-->>PM: Reviewer done
+    PM->>Scope: Export final scope
+    PM->>Kanban: Create final PM task
+    Kanban-->>FinalGate: Final task complete
+    FinalGate-->>Plans: Save final metadata
+    PM-->>User: Deliver final report
+            </div>
+          </div>
+          <p class="uml-note">
+            PM UML의 핵심은 event source가 항상 <code>task done</code>이며, PM reasoning이 아니라 completion hook + contract validator가 phase 진입 여부를 결정한다는 점이다.
+          </p>
+        </div>
+
+        <div class="tab-panel" id="panel-reviewer" role="tabpanel" aria-labelledby="tab-reviewer">
+          <h3>Reviewer 동작 메커니즘</h3>
+          <p>
+            Reviewer는 구현자와 별개 컨텍스트에서 승인된 설계 스펙을 읽고, 그 설계와 실제 산출물의 정렬성을 구조화된 verdict metadata로 제출하는 품질 게이트다.
+            reviewer는 architect의 사고과정을 읽지 않고도 <code>design_spec</code>, <code>expected_deliverables</code>, <code>acceptance_criteria</code> 기반으로 검증을 수행한다.
+          </p>
+          <div class="kv">
+            <div>입력</div><div><code>approved_scope.json</code>의 <code>review</code> snapshot, <code>design_spec</code>, implementation artifacts, verification evidence path</div>
+            <div>필수 출력</div><div><code>verdict</code>, <code>summary</code>, <code>evidence</code>, <code>changed_files</code>, <code>scope_status</code>, <code>validated_artifacts</code>, <code>acceptance_checks</code>, <code>unmet_requirements</code>, <code>design_alignment_summary</code></div>
+            <div>핵심 함수</div><div><code>build_worker_context()</code>, <code>_validate_reviewer_completion_metadata()</code>, PM reviewer callback, final consistency validator</div>
+            <div>품질 게이트</div><div>verdict schema 검사, changed_files allowed path 검사, blocked verdict 시 blocked_reason 요구, design-alignment fields non-empty 검사</div>
+            <div>downstream 영향</div><div>reviewer_result가 final phase의 입력 계약이 되며, unmet requirement가 남으면 final completed 보고가 차단된다</div>
+          </div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Reviewer 입력 상세</h3>
+            <div class="kv">
+              <div><code>review</code> snapshot</div><div>review mode, required verdict fields, required evidence, allowed verdict values 같은 reviewer 계약의 본체다. reviewer는 이 스냅샷을 기준으로 무엇을 반드시 제출해야 하는지 결정한다.</div>
+              <div><code>design_spec</code></div><div>승인된 설계 결과물의 요약 계약이다. 최소한 design artifact path, expected deliverables, acceptance criteria를 포함하며 reviewer가 "무엇을 기준으로 검증할지"를 정의한다.</div>
+              <div>implementation artifacts</div><div>구현자가 남긴 코드/문서/산출물이다. reviewer는 이 실제 결과물을 design_spec과 대조한다.</div>
+              <div>verification evidence path</div><div>검증 산출물을 어디에 남겨야 하는지 알려주는 경로다. reviewer의 evidence는 단순 텍스트가 아니라 artifact path로 남겨져야 final 단계에서 재검사할 수 있다.</div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Reviewer 출력 필드 의미</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>필드</th>
+                  <th>의미</th>
+                  <th>실무적 해석</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>verdict</code></td>
+                  <td>reviewer의 최종 판정이다. 현재 계약상 <code>pass</code>, <code>concern</code>, <code>blocked</code> 중 하나다.</td>
+                  <td><code>pass</code>는 final handoff 가능, <code>concern</code>은 follow-up 전제로 final 보고 가능, <code>blocked</code>는 final handoff 중단을 뜻한다.</td>
+                </tr>
+                <tr>
+                  <td><code>summary</code></td>
+                  <td>검토 결과의 짧은 요약이다.</td>
+                  <td>사람이 reviewer 결과를 빠르게 이해하기 위한 한 줄 판정문이다.</td>
+                </tr>
+                <tr>
+                  <td><code>evidence</code></td>
+                  <td>reviewer가 실제로 남긴 verification artifact 경로 목록이다.</td>
+                  <td>"검토했다"는 주장만으로는 안 되고, 실제 재검사 가능한 증빙 파일이 있어야 한다.</td>
+                </tr>
+                <tr>
+                  <td><code>changed_files</code></td>
+                  <td>검토 대상 변경 파일 목록이다.</td>
+                  <td>allowed path 범위 안에서만 작업했는지 scope gate가 이 목록으로 검사된다.</td>
+                </tr>
+                <tr>
+                  <td><code>scope_status</code></td>
+                  <td>변경 범위가 계약상 허용 경로 안인지에 대한 정규화된 상태다.</td>
+                  <td>대표적으로 <code>within_allowed_paths</code> 또는 out-of-scope 계열 값을 가지며, out-of-scope면 final handoff가 막힌다.</td>
+                </tr>
+                <tr>
+                  <td><code>validated_artifacts</code></td>
+                  <td>reviewer가 실제로 검토 완료했다고 인정한 산출물 목록이다.</td>
+                  <td>어떤 deliverable을 확인했는지 명시해 final/report 단계에서 정합성 검사가 가능해진다.</td>
+                </tr>
+                <tr>
+                  <td><code>acceptance_checks</code></td>
+                  <td>acceptance criteria별 점검 결과다.</td>
+                  <td>각 요구사항이 pass인지, concern인지, blocked인지 구조화해서 남기는 체크리스트 역할을 한다.</td>
+                </tr>
+                <tr>
+                  <td><code>unmet_requirements</code></td>
+                  <td>아직 충족되지 않은 요구사항 목록이다.</td>
+                  <td>이 값이 비어 있지 않으면 final에서 <code>completed</code> 보고를 그대로 허용하면 안 된다.</td>
+                </tr>
+                <tr>
+                  <td><code>design_alignment_summary</code></td>
+                  <td>설계와 구현의 정렬 상태를 서술형으로 요약한 필드다.</td>
+                  <td>최종 보고에서 reviewer가 본 정렬 상태를 사용자에게 설명하는 근거가 된다.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Reviewer verdict 해석 규칙</h3>
+            <div class="kv">
+              <div><code>pass</code></div><div>설계 스펙 대비 핵심 deliverable과 acceptance criteria가 충족되었고, scope도 허용 범위 안에 있다고 reviewer가 판단한 상태다. 이 경우 final scope export가 가능하다.</div>
+              <div><code>concern</code></div><div>완전히 막을 정도는 아니지만 남은 위험, follow-up, 주의사항이 있다는 뜻이다. final phase는 가능하지만 보통 <code>needs_followup</code> 성격의 보고와 연결된다.</div>
+              <div><code>blocked</code></div><div>설계 불일치, 중요한 acceptance 미충족, out-of-scope 변경 등으로 downstream 진행을 멈춰야 한다는 뜻이다. 이 경우 blocked_reason 같은 추가 근거가 필요하다.</div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Reviewer 품질 게이트가 실제로 막는 것</h3>
+            <ul>
+              <li>필수 verdict field 누락</li>
+              <li>evidence/artifact 없이 "검토 완료"라고 주장하는 경우</li>
+              <li>허용 경로 밖 파일 변경을 숨기는 경우</li>
+              <li>acceptance criteria 점검 없이 pass를 선언하는 경우</li>
+              <li>unmet requirement가 있는데도 final에서 completed로 포장하려는 경우</li>
+            </ul>
+          </div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Reviewer 출력 템플릿 예시</h3>
+            <p>아래 형태를 reviewer의 canonical output template으로 사용하면 schema 오류를 가장 적게 낼 수 있다.</p>
+<pre>{
+  "verdict": "pass",
+  "summary": "Approved design deliverables are implemented and verified.",
+  "evidence": [
+    ".soul/artifacts/verification/plan_x_verification.md"
+  ],
+  "changed_files": [
+    "src/MyService/Application/UseCases/CreateThing.cs",
+    "tests/MyService.Tests/CreateThingTests.cs"
+  ],
+  "scope_status": "within_allowed_paths",
+  "validated_artifacts": [
+    ".soul/artifacts/implementation/plan_x_implementation.md",
+    ".soul/artifacts/verification/plan_x_verification.md"
+  ],
+  "acceptance_checks": [
+    {"criterion": "CreateThing command is exposed", "status": "pass", "notes": "API and handler confirmed."},
+    {"criterion": "Regression tests pass", "status": "pass", "notes": "Targeted tests executed."}
+  ],
+  "unmet_requirements": [],
+  "design_alignment_summary": "Implementation matches the approved design and stays within scope."
+}</pre>
+          </div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Reviewer concern / blocked 예시</h3>
+<pre>{
+  "verdict": "concern",
+  "summary": "Core flow works but one follow-up remains.",
+  "evidence": [".soul/artifacts/verification/plan_x_verification.md"],
+  "changed_files": ["src/MyService/Application/UseCases/CreateThing.cs"],
+  "scope_status": "within_allowed_paths",
+  "validated_artifacts": [".soul/artifacts/implementation/plan_x_implementation.md"],
+  "acceptance_checks": [
+    {"criterion": "Core command path works", "status": "pass", "notes": "Confirmed."},
+    {"criterion": "Failure telemetry documented", "status": "concern", "notes": "Needs follow-up doc update."}
+  ],
+  "unmet_requirements": ["Failure telemetry documentation is missing."],
+  "design_alignment_summary": "Implementation is mostly aligned, but one non-blocking follow-up remains."
+}</pre>
+<pre>{
+  "verdict": "blocked",
+  "summary": "Out-of-scope file changes detected.",
+  "evidence": [".soul/artifacts/verification/plan_x_verification.md"],
+  "changed_files": ["src/Unexpected/ManualPatch.cs"],
+  "scope_status": "out_of_scope",
+  "validated_artifacts": [".soul/artifacts/verification/plan_x_verification.md"],
+  "acceptance_checks": [
+    {"criterion": "Changes remain within approved paths", "status": "blocked", "notes": "Unexpected file modified."}
+  ],
+  "unmet_requirements": ["Implementation must be reworked within approved paths."],
+  "design_alignment_summary": "Current implementation cannot be accepted because it violates approved scope.",
+  "blocked_reason": "Changed files include paths outside approved scope."
+}</pre>
+          </div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Canonical output templates</h3>
+            <p>운영 시 PM/Reviewer/Final worker는 아래 골격을 그대로 따르는 쪽이 가장 안정적이다.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>역할</th>
+                  <th>권장 출력 형태</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>PM</td>
+                  <td><code>plan summary + approval request + task breakdown</code></td>
+                  <td>사용자 승인 단계에서는 자유 서술이 가능하지만, task breakdown과 acceptance criteria는 구조적으로 적는 것이 좋다.</td>
+                </tr>
+                <tr>
+                  <td>Reviewer</td>
+                  <td><code>JSON metadata + verification artifact</code></td>
+                  <td>가장 엄격한 구조화 출력이 필요하다. schema validator가 직접 읽는다.</td>
+                </tr>
+                <tr>
+                  <td>Final</td>
+                  <td><code>final report markdown + final metadata</code></td>
+                  <td>사용자용 자연어 보고와 machine-checkable metadata를 동시에 만족해야 한다.</td>
+                </tr>
+              </tbody>
+            </table>
+<pre>PM template
+- Request summary
+- Proposed scope
+- Acceptance criteria
+- Task breakdown
+- Approval question
+
+Reviewer template
+- verification markdown artifact
+- reviewer_result metadata JSON
+
+Final template
+- final report markdown artifact
+- final_report metadata JSON</pre>
+          </div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Final report metadata 예시</h3>
+<pre>{
+  "completion_status": "needs_followup",
+  "report_summary": "Implementation completed with one documented follow-up.",
+  "user_report": "The requested flow is implemented. Reviewer confirmed core acceptance criteria, but follow-up work remains for failure telemetry documentation.",
+  "delivered_artifacts": [
+    ".soul/artifacts/implementation/plan_x_implementation.md",
+    ".soul/artifacts/verification/plan_x_verification.md",
+    ".soul/artifacts/final/plan_x_final_report.md"
+  ],
+  "open_risks": [
+    "Failure telemetry documentation is missing."
+  ]
+}</pre>
+          </div>
+          <div class="card" style="margin-top:14px;">
+            <h3>Blocked / Concern 운영 정책</h3>
+            <div class="kv">
+              <div><code>verdict=pass</code></div><div>PM은 final handoff를 열어도 된다. 기본 목표는 <code>completion_status=completed</code> 보고다. 단, final report는 reviewer evidence와 scope 상태를 그대로 존중해야 한다.</div>
+              <div><code>verdict=concern</code></div><div>PM은 사용자 보고를 막지 않아도 되지만, follow-up을 숨기면 안 된다. 기본 정책은 <code>completion_status=needs_followup</code>와 non-empty <code>open_risks</code>를 사용해 잔여 위험을 드러내는 것이다. 현재 runtime은 reviewer concern 시 backend-specialist follow-up task를 자동 생성하고, 그 task id를 final scope/context에도 전달한다.</div>
+              <div><code>verdict=blocked</code></div><div>PM은 final handoff를 열지 않는다. 사용자에게는 진행 중단 사유와 다음 조치가 필요하다고 보고하고, 구현/설계 수정 루프로 되돌리는 것이 기본 정책이다. 현재 runtime은 blocked fix follow-up task를 자동 생성한다.</div>
+              <div><code>scope_status=out_of_scope</code></div><div>기술적 품질과 별개로 계약 위반으로 본다. reviewer가 blocked를 주지 않았더라도 운영 정책상 blocked로 취급하는 것이 안전하다.</div>
+              <div><code>unmet_requirements</code> 비어있지 않음</div><div>final completed 보고 금지. PM은 unmet requirement를 <code>open_risks</code>나 follow-up 항목으로 승격해서 사용자에게 그대로 노출해야 한다.</div>
+              <div>권장 후속 액션</div><div><code>concern</code>은 follow-up task 생성 검토, <code>blocked</code>는 implementer 또는 architect 수정 task 재진입이 기본이다.</div>
+            </div>
+          </div>
+          <div class="mermaid-wrap">
+            <div class="mermaid">
+flowchart TD
+    A[Scope] --> B[Design Spec]
+    B --> C[Implementation Artifacts]
+    C --> D[Acceptance Checks]
+    D --> E[Reviewer Metadata]
+    E --> F[Final Scope Or Block]
+            </div>
+          </div>
+          <div class="mermaid-wrap">
+            <div class="mermaid">
+flowchart LR
+    A[Pass] --> B[Export Final Scope]
+    C[Concern] --> D[Allow Follow Up]
+    E[Blocked] --> F[Stop Final Handoff]
+            </div>
+          </div>
+          <div class="callout">
+            <strong>Reviewer의 본질</strong><br />
+            Reviewer는 자유 텍스트 리뷰어가 아니다. 설계 스냅샷을 기준으로 acceptance check 결과, 미충족 요구사항, 설계 정렬 요약을 구조화해서 남기고,
+            그 결과가 final PM 보고의 허용 범위를 결정하는 deterministic quality gate다.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Validated Live Runs</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>v7</h3>
+          <p>첫 clean live flow 성공. plan → architect → design approval → implementer/reviewer/final → completion notifier까지 end-to-end 검증.</p>
+        </div>
+        <div class="card">
+          <h3>v9</h3>
+          <p>explicit contract validator 반영 후 canonical contract 기반 clean run 성공. 다만 design approval notification 누락 1회 발생.</p>
+        </div>
+        <div class="card">
+          <h3>v10</h3>
+          <p>v9에서 남았던 design approval notification 누락 버그를 수정한 뒤 재검증. 설계 승인 요청 자동 발송과 최종 완료 보고 모두 정상 동작.</p>
+        </div>
+        <div class="card">
+          <h3>v11</h3>
+          <p>project_manager profile context에서 reviewer/final schema 강화 이후 재검증. reviewer_result pass, final completed, final artifact section checks까지 포함한 live smoke run 성공.</p>
+        </div>
+      </div>
+      <div class="callout">
+        <strong>운영상 중요한 발견</strong><br />
+        live run 중 <code>HERMES_HOME=~/.hermes</code> 루트 컨텍스트에서는 PM plan state가 profile state와 분리되어 completion transition이 PM plan에 반영되지 않았다.
+        실제 운영/재현 스크립트는 <code>HERMES_HOME=/home/jjc/.hermes/profiles/project_manager</code> 컨텍스트에서 실행해야 한다.
+      </div>
+    </section>
+
+    <section>
+      <h2>Test and Verification State</h2>
+      <p>이번 1차 제품화에서 추가/유지된 검증은 코드 기반 회귀 테스트로 고정되었다. 최근 변경에는 reviewer verdict schema, changed_files scope gate, final reviewer_result validator, final report output schema, delivered artifact existence/contract checks, final report section checks가 포함된다.</p>
+      <ul>
+        <li><code>tests/tools/test_pm_workflow_core_transitions.py</code> — core transition, reviewer verdict gate, final handoff blocking/export, final report persistence</li>
+        <li><code>tests/tools/test_pm_design_ready_notifier.py</code> — design-ready notification emission and no-mutation behavior</li>
+        <li><code>tests/hermes_cli/test_kanban_db.py</code> — Kanban DB completion path regression, reviewer/final completion gating, final report schema validation</li>
+      </ul>
+      <p class="footer-note">최근 검증 실행 기준: 111 tests passed.</p>
+    </section>
+
+    <section>
+      <h2>Current Product Readiness Assessment</h2>
+      <div class="grid">
+        <div class="card">
+          <h3 class="ok">이제 가능하다고 판단하는 것</h3>
+          <ul>
+            <li>PM만 사용자와 소통하는 staged workflow 운영</li>
+            <li>설계 승인 이후에만 구현을 여는 gate enforcement</li>
+            <li>artifact/evidence 기반 reviewer/final 검증</li>
+            <li>canonical contract 기반 계획 검증</li>
+            <li>PM 최종 완료 보고 자동화</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3 class="warn">아직 남아 있는 것</h3>
+          <ul>
+            <li>UI/interaction layer 개선은 아직 보류</li>
+            <li><code>Cronjob Response</code> 래퍼 같은 전달 UX는 잔존</li>
+            <li>auxiliary title generation 401은 핵심 workflow 비차단 경고이지만, 별도 안정화 대상</li>
+          </ul>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px;">
+        <h3>Auxiliary title generation 401 설명</h3>
+        <p>
+          이 경고는 plan 생성, task 실행, phase transition, 최종 보고 같은 본 workflow가 아니라,
+          대화/작업 제목을 더 보기 좋게 만들기 위한 보조 title generation 호출에서 발생한 인증 실패를 의미한다.
+          실제 v10 검증에서는 이 경고가 있어도 architect 완료, 설계 승인 요청, 구현/검토/final 진행, 최종 보고까지 모두 정상적으로 수행되었다.
+        </p>
+        <ul>
+          <li>성격: secondary / auxiliary auth warning</li>
+          <li>영향: 제목 자동 생성 실패 가능, 그러나 core PM workflow는 계속 진행 가능</li>
+          <li>우선순위: 운영 잡음 감소 차원의 후속 안정화 항목</li>
+        </ul>
+      </div>
+    </section>
+
+    <section>
+      <h2>Deferred Work</h2>
+      <p>
+        사용자 결정에 따라 UX polish는 이번 1차 완료 범위에서 제외한다.
+        특히 아래 항목은 중요도는 인정하되 후순위로 미룬다.
+      </p>
+      <ul>
+        <li>Slack 버튼/상태 기반 승인 UI</li>
+        <li>자연어 승인 문구 parser 개선</li>
+        <li><code>Cronjob Response</code> 래퍼 제거 또는 축소</li>
+        <li>메시지 브랜딩/표현 polish</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Conclusion</h2>
+      <p>
+        PM 중심 staged workflow는 더 이상 개념 검증 단계가 아니다.
+        현재 상태는 <strong>“작동하는 프로토타입”을 넘어 “핵심 메커니즘이 검증된 1차 제품화 완료 상태”</strong>로 보는 것이 맞다.
+        남은 일은 주로 UX, 부가 기능 안정화, 운영 편의성 향상이다.
+      </p>
+      <p>
+        즉 현재 시스템은 다음 전제를 만족한다:
+        <strong>Soul은 방향을 주고, Python/state machine/contract/evidence가 실제 법을 집행한다.</strong>
+      </p>
+    </section>
+  </div>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      securityLevel: 'loose',
+      themeVariables: {
+        primaryColor: '#182244',
+        primaryTextColor: '#e9eefc',
+        primaryBorderColor: '#7cc4ff',
+        lineColor: '#aab6d3',
+        secondaryColor: '#121933',
+        tertiaryColor: '#0d1530',
+        noteBkgColor: '#182244',
+        noteTextColor: '#e9eefc'
+      }
+    });
+
+    const allBlocks = Array.from(document.querySelectorAll('.mermaid'));
+    allBlocks.forEach((block, index) => {
+      const source = block.textContent || '';
+      block.dataset.mermaidSource = source.trim();
+      block.dataset.mermaidId = `mermaid-block-${index}`;
+    });
+
+    const renderMermaidIn = async (root) => {
+      if (!root) return;
+      const blocks = Array.from(root.querySelectorAll('.mermaid'));
+      for (const block of blocks) {
+        const source = block.dataset.mermaidSource || '';
+        if (!source.trim()) continue;
+        const id = block.dataset.mermaidId || `mermaid-${Math.random().toString(36).slice(2)}`;
+        try {
+          const { svg } = await mermaid.render(id, source);
+          block.innerHTML = svg;
+          block.removeAttribute('data-processed');
+        } catch (error) {
+          block.textContent = source;
+          console.error('Mermaid render failed for block:', id, error);
+        }
+      }
+    };
+
+    const tabRoots = Array.from(document.querySelectorAll('[data-tabs]'));
+    if (!tabRoots.length) {
+      await renderMermaidIn(document);
+    }
+
+    for (const tabsRoot of tabRoots) {
+      const buttons = Array.from(tabsRoot.querySelectorAll('[role="tab"]'));
+      const panels = Array.from(tabsRoot.querySelectorAll('[role="tabpanel"]'));
+      const activate = async (button) => {
+        const targetId = button.getAttribute('aria-controls');
+        let activePanel = null;
+        buttons.forEach((btn) => {
+          const selected = btn === button;
+          btn.setAttribute('aria-selected', selected ? 'true' : 'false');
+        });
+        panels.forEach((panel) => {
+          const selected = panel.id === targetId;
+          panel.classList.toggle('active', selected);
+          if (selected) activePanel = panel;
+        });
+        await renderMermaidIn(activePanel);
+      };
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          activate(button);
+        });
+      });
+      const selected = buttons.find((btn) => btn.getAttribute('aria-selected') === 'true') || buttons[0];
+      if (selected) {
+        await activate(selected);
+      }
+    }
+  </script>
+</body>
+</html>

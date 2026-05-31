@@ -145,7 +145,7 @@
         <span class="badge cyan">Slack PM only</span>
         <span class="badge green">Kanban worker dispatch</span>
         <span class="badge amber">2-stage approval</span>
-        <span class="badge">Claude Code runner evidence</span>
+        <span class="badge">Claude primary + Codex fallback evidence</span>
         <span class="badge">Runtime cron notifiers</span>
       </div>
     </header>
@@ -230,8 +230,10 @@ flowchart LR
           <tbody>
             <tr><td><code>Slack</code></td><td>사용자가 PM에게 요청하는 UI</td><td>사용자는 PM만 호출한다. worker는 직접 Slack bot으로 노출하지 않는다.</td></tr>
             <tr><td><code>project_manager</code></td><td>요청 해석, 계획 작성, 승인 요청, Kanban task 생성, 최종보고</td><td>오케스트레이션 전용. 코드 직접 구현 주체가 아니다.</td></tr>
-            <tr><td><code>pm_workflow_tool.py</code></td><td>PM workflow 정책 강제</td><td>승인 전 구현 금지, plan_kind별 구조 검증, task graph 검증.</td></tr>
+            <tr><td><code>pm_workflow_tool.py</code></td><td>PM workflow 정책 강제</td><td>승인 전 구현 금지, plan_kind별 구조 검증, task graph 검증, runner command 생성.</td></tr>
             <tr><td><code>Kanban DB</code></td><td>worker들이 가져갈 실제 작업 카드 저장</td><td>PM의 말이 아니라 실제 <code>t_&lt;hex&gt;</code> task 존재가 실행 증거다.</td></tr>
+            <tr><td><code>pm_claude_delegation.py</code></td><td>worker LLM 실행 wrapper</td><td>기본은 Claude Code를 실행하고, 쿼터/토큰 소진 문구가 감지되면 설정된 Codex fallback command를 1회 실행한다.</td></tr>
+            <tr><td><code>pm_hermes_prompt_proxy.py</code></td><td>Codex fallback proxy</td><td>stdin prompt를 <code>hermes -p backend-specialist chat -q ...</code>로 전달하고 runtime metadata/timeout을 manifest-friendly하게 정리한다.</td></tr>
             <tr><td><code>backend-architect</code></td><td>설계 산출물 작성</td><td>구현하지 않고 design artifact만 작성한다.</td></tr>
             <tr><td><code>backend-implementer</code></td><td>승인된 scope 안에서 코드/테스트 변경</td><td>Claude runner manifest와 implementation artifact가 completion evidence다.</td></tr>
             <tr><td><code>backend-reviewer</code></td><td>구현 결과를 독립 검증</td><td>verdict, scope_status, acceptance_checks, evidence를 남긴다.</td></tr>
@@ -274,7 +276,7 @@ sequenceDiagram
   PM->>Tool: pm_execute_plan(plan_id)
   Tool->>Board: architect/design task 생성
   Board->>Arch: dispatcher가 task claim/spawn
-  Arch->>Arch: Claude runner로 설계 artifact 작성
+  Arch->>Arch: Claude primary 실행\n쿼터 소진 시 Codex fallback 1회
   Arch->>Board: task complete + manifest/evidence
   Cron->>Plan: design ready 상태 감지/표시
   Cron-->>Slack: 설계 검토 완료, 사용자 설계 승인 요청
@@ -417,14 +419,14 @@ classDiagram
               <td><span class="pill arch">backend-architect</span></td>
               <td>요청 원문, project path, 설계 contract, 구현 금지 조건, 필수 heading 목록</td>
               <td>현재 구조 분석, 변경 후보 파일, 대안 비교, 구현 범위/비범위, 검증 계획, 사용자 확인 필요사항</td>
-              <td><code>.soul/artifacts/design/&lt;plan&gt;_design.md</code>, <code>.soul/artifacts/claude/*manifest.json</code></td>
-              <td>필수 heading이 모두 있고 각 section 본문이 있으며 첫 줄이 <code>## 상태</code> 등 contract에 맞아야 함</td>
+              <td><code>.soul/artifacts/design/&lt;plan&gt;_design.md</code>, <code>.soul/artifacts/claude/*manifest.json</code>, optional fallback metadata</td>
+              <td>필수 heading이 모두 있고 각 section 본문이 있으며 첫 줄이 <code>## 상태</code> 등 contract에 맞아야 함. Claude 쿼터 소진이면 Codex fallback 결과도 같은 contract를 통과해야 함</td>
             </tr>
             <tr>
               <td><span class="pill impl">backend-implementer</span></td>
               <td>승인된 설계, <code>approved_scope.json</code>, implementation_paths, expected_deliverables, 기존 코드</td>
               <td>승인된 파일 범위 안에서 최소 변경인지, 테스트/빌드 증거를 만들 수 있는지, 비범위를 건드리지 않았는지</td>
-              <td>production/test 코드 변경, <code>.soul/artifacts/implementation/*</code>, Claude manifest, 실행 evidence</td>
+              <td>production/test 코드 변경, <code>.soul/artifacts/implementation/*</code>, runner manifest, 실행 evidence</td>
               <td>runner manifest가 있고, artifact가 있으며, 승인된 deliverable/evidence가 충족되어야 함</td>
             </tr>
             <tr>
@@ -479,7 +481,7 @@ flowchart TB
     Impl[.soul/artifacts/implementation/*.md]
     Verify[.soul/artifacts/verification/*.md]
     Final[.soul/artifacts/final/*.md]
-    Manifest[.soul/artifacts/claude/*manifest.json]
+    Manifest[.soul/artifacts/claude/*manifest.json\n*.stdout.txt / *.stderr.txt / *.runner.log]
     Code[src/, tests/]
   end
 
@@ -512,6 +514,20 @@ flowchart TB
           </ul>
         </div>
       </div>
+
+      <div class="card" style="margin-top:14px;">
+        <h3><span class="card-dot dot-cyan"></span>Runner manifest에 새로 남는 것</h3>
+        <p>
+          <code>pm_claude_delegation.py</code>는 더 이상 “프로세스가 0으로 끝났는가”만 보지 않는다. 실행 stdout/stderr, timeout,
+          artifact contract 검증, repair attempt, fallback attempt를 모두 manifest와 sidecar log로 남긴다.
+        </p>
+        <ul>
+          <li><code>status</code>: <code>completed</code>, <code>failed</code>, <code>timeout</code>, <code>artifact_contract_failed</code></li>
+          <li><code>fallback</code>: Claude quota/token 소진 감지 시 <code>used</code>, <code>reason</code>, primary/fallback command와 exit code 기록</li>
+          <li><code>artifact_repair</code>: architect design artifact가 필수 heading contract를 못 맞추면 최대 2회 repair 결과 기록</li>
+          <li><code>*.runner.log</code>: command start/finish, timeout, fallback start/finish, manifest write phase 기록</li>
+        </ul>
+      </div>
     </section>
 
     <section id="gates">
@@ -523,7 +539,11 @@ flowchart TB
 flowchart TD
   Start[Task complete 요청] --> Find[PM plan에서 task phase 찾기]
   Find --> Phase{phase?}
-  Phase -->|architect| A1[Claude manifest 존재 확인]
+  Phase -->|architect| A0[runner manifest 존재 확인]
+  A0 --> Q{Claude quota 소진?}
+  Q -->|예| C1[Codex fallback attempt 확인]
+  Q -->|아니오| A1[primary command 결과 확인]
+  C1 --> A1
   A1 --> A2[design artifact contract 확인]
   A2 -->|실패| Repair{repair 가능?}
   Repair -->|1~2회 가능| A3[repair prompt로 재실행]
@@ -558,7 +578,8 @@ flowchart TD
           <tbody>
             <tr><td>Plan contract validation</td><td>assignee, mode, parents, plan_kind, expected_deliverables, phase_allowed_paths</td><td>plan 생성/실행 거부</td></tr>
             <tr><td>Architect artifact contract</td><td>필수 heading, 빈 section 여부, 첫 줄, 상태보고 문장 금지</td><td>최대 2회 repair retry 후 blocked</td></tr>
-            <tr><td>Runner manifest gate</td><td>Claude runner manifest, artifact path, command success status</td><td>task complete 거부</td></tr>
+            <tr><td>Runner manifest gate</td><td>runner manifest, artifact path, command success status, timeout/fallback/repair metadata</td><td>task complete 거부 또는 blocked 전이</td></tr>
+            <tr><td>Claude quota fallback gate</td><td>stdout/stderr의 usage limit/quota/token 소진 문구, <code>HERMES_PM_CLAUDE_FALLBACK_COMMAND</code>, fallback exit code</td><td>Codex fallback 1회 실행 후 결과를 같은 manifest contract로 검증</td></tr>
             <tr><td>Approved scope gate</td><td><code>.soul/approved_scope.json</code>의 allowed_paths/evidence</td><td>scope mismatch로 blocked</td></tr>
             <tr><td>Reviewer design-aware gate</td><td>acceptance_checks, validated_artifacts, unmet_requirements, design_alignment_summary</td><td>reviewer task blocked 또는 concern/follow-up</td></tr>
             <tr><td>Final consistency gate</td><td>reviewer findings와 final report의 모순 여부, open risks 반영 여부</td><td>final task blocked</td></tr>
@@ -616,9 +637,17 @@ sequenceDiagram
         <pre class="mermaid">
 flowchart TD
   Fail[문제 발생] --> Kind{문제 종류}
+  Kind -->|Claude quota/token 소진| Quota[Codex fallback 1회]
+  Quota --> FallbackCheck{fallback 성공?}
+  FallbackCheck -->|예| Continue[계속 진행]
+  FallbackCheck -->|아니오| BlockQuota[blocked: fallback_failed 또는 timeout]
+
+  Kind -->|runner timeout/nonzero + manifest 있음| ManifestFail[failed manifest 기록]
+  ManifestFail --> BlockManifest[Kanban/PM 상태에 blocked 반영]
+
   Kind -->|architect artifact 형식 문제| Repair1[repair prompt 1회]
   Repair1 --> Check1{contract 통과?}
-  Check1 -->|예| Continue[계속 진행]
+  Check1 -->|예| Continue
   Check1 -->|아니오| Repair2[repair prompt 2회]
   Repair2 --> Check2{contract 통과?}
   Check2 -->|예| Continue
@@ -653,13 +682,33 @@ hermes cron list
 hermes kanban stats
 hermes -p backend-architect chat -q '짧게 OK만 답해.' --quiet
 hermes -p backend-implementer chat -q '짧게 OK만 답해.' --quiet
-hermes -p backend-reviewer chat -q '짧게 OK만 답해.' --quiet</code></pre>
+hermes -p backend-reviewer chat -q '짧게 OK만 답해.' --quiet
+hermes -p backend-specialist chat -q '짧게 OK만 답해.' --quiet</code></pre>
         </div>
         <div class="card">
           <h3><span class="card-dot dot-green"></span>runtime script sync</h3>
           <pre><code>cd ~/.hermes/hermes-agent
 scripts/sync-pm-workflow-runtime.sh</code></pre>
           <p class="small">canonical source는 repo의 <code>scripts/pm-workflow/</code>, runtime copy는 <code>~/.hermes/scripts/</code>.</p>
+        </div>
+      </div>
+
+      <div class="grid two" style="margin-top:14px;">
+        <div class="card">
+          <h3><span class="card-dot dot-amber"></span>Claude 소진 시 Codex fallback 설정</h3>
+          <p>primary runner는 계속 Claude다. 단, Claude stdout/stderr에서 usage limit/quota/token 소진 문구가 감지되면 아래 fallback command를 1회 실행한다.</p>
+          <pre><code>HERMES_PM_CLAUDE_FALLBACK_COMMAND="python3 -m tools.pm_hermes_prompt_proxy --profile backend-specialist --model gpt-5.5 --provider openai-codex --toolsets file,terminal --ignore-rules --max-turns 8 --timeout 180"
+HERMES_PM_CLAUDE_RUNNER_TIMEOUT=240</code></pre>
+          <p class="small"><code>HERMES_PM_CLAUDE_COMMAND</code>를 설정하면 primary 자체가 바뀐다. 자동 fallback 운영에서는 이 값을 비워두고 fallback command만 둔다.</p>
+        </div>
+        <div class="card">
+          <h3><span class="card-dot dot-violet"></span>최근 runner hardening 검증</h3>
+          <ul>
+            <li>fake Claude quota exhausted → Codex fallback → artifact <code>OK</code> smoke 성공</li>
+            <li>runner timeout은 traceback 대신 <code>status=timeout</code>, <code>exit_code=124</code> manifest로 기록</li>
+            <li>failed manifest가 있으면 bootstrap이 nonzero rc에서도 Kanban/PM blocked 상태 반영</li>
+            <li>집중 회귀: <code>323 passed</code></li>
+          </ul>
         </div>
       </div>
 

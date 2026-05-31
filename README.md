@@ -36,6 +36,27 @@ Use any model you want — [Nous Portal](https://portal.nousresearch.com), [Open
 curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
 ```
 
+### Labs branch install
+
+This repository also carries a personal labs branch for PM/Kanban workflow hardening experiments. To install or update that branch directly:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JaeCheon8587/hermes-agent-labs/local/pm-workflow-hardening/scripts/install-labs.sh | bash
+```
+
+Skip the setup wizard if you already have Hermes configuration:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JaeCheon8587/hermes-agent-labs/local/pm-workflow-hardening/scripts/install-labs.sh | bash -s -- --skip-setup
+```
+
+The wrapper clones or updates `git@github.com:JaeCheon8587/hermes-agent-labs.git` at `local/pm-workflow-hardening`, then delegates to the standard `scripts/install.sh`. If SSH is not configured on the target machine, override the clone URL with HTTPS:
+
+```bash
+HERMES_LABS_REPO=https://github.com/JaeCheon8587/hermes-agent-labs.git \
+  curl -fsSL https://raw.githubusercontent.com/JaeCheon8587/hermes-agent-labs/local/pm-workflow-hardening/scripts/install-labs.sh | bash
+```
+
 ### Windows (native, PowerShell) — Early Beta
 
 > **Heads up:** Native Windows support is **early beta**. It installs and runs, but hasn't been road-tested as broadly as our Linux/macOS/WSL2 paths. Please [file issues](https://github.com/NousResearch/hermes-agent/issues) when you hit rough edges. For the most battle-tested Windows setup today, run the Linux/macOS one-liner above inside **WSL2**.

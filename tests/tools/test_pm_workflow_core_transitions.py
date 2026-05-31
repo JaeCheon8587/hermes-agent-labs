@@ -601,6 +601,8 @@ def test_reviewer_design_validation_coverage_allows_concern_with_unmet_checks():
 def test_pm_execute_plan_injects_exact_runner_invocation_and_prompt_file(hermes_home, tmp_path, monkeypatch):
     workspace = _workspace(tmp_path)
     monkeypatch.setenv("HERMES_HOME", str(hermes_home))
+    monkeypatch.delenv("HERMES_PM_CLAUDE_COMMAND", raising=False)
+    monkeypatch.delenv("HERMES_PM_CLAUDE_RUNNER_TIMEOUT", raising=False)
     monkeypatch.setattr(pm, "_run_worker_preflight", lambda assignees: {"ok": True, "checked": list(assignees)})
 
     created = json.loads(pm.pm_create_plan(
@@ -627,15 +629,15 @@ def test_pm_execute_plan_injects_exact_runner_invocation_and_prompt_file(hermes_
     assert context.is_file()
 
     prompt_text = prompt.read_text(encoding="utf-8")
-    assert "# Claude Code Architect Delegation Prompt" in prompt_text
-    for heading in pm._COMMON_CLAUDE_PROMPT_SECTIONS:
-        assert heading in prompt_text
-    assert "read-only architect 단계" in prompt_text
+    assert "# Architect Task Envelope" in prompt_text
+    assert "Claude Code 실행 prompt가 아니다" in prompt_text
+    assert "architect runner가 이 envelope를 해석해 Claude Code 설계 prompt를 직접 구성한다" in prompt_text
     assert "설계는 Python runner가 Claude Code에 위임한다" in prompt_text
-    assert "최종 응답 자체가 완전한 markdown 설계 문서" in prompt_text
-    assert "상태 보고만 출력하지 말고" in prompt_text
-    assert "heading 체크리스트/요약표로 대체하지 않는다" in prompt_text
-    assert "## 설계 요약" in prompt_text
+    assert "read-only architect 단계" in prompt_text
+    assert "최종 응답 자체가 완전한 markdown 설계 문서" not in prompt_text
+    assert "상태 보고만 출력하지 말고" not in prompt_text
+    assert "heading 체크리스트/요약표로 대체하지 않는다" not in prompt_text
+    assert "`## 설계 요약`" not in prompt_text
     assert str(manifest.relative_to(workspace)) not in prompt_text
     assert f"plan_id: {plan_id}" not in prompt_text
 
@@ -654,8 +656,24 @@ def test_pm_execute_plan_injects_exact_runner_invocation_and_prompt_file(hermes_
     assert f"--prompt-file .soul/prompts/{plan_id}_{task_id}_architect.md" in body
     assert f"--artifact-path .soul/artifacts/design/{plan_id}_design.md" in body
     assert f"--manifest-path .soul/artifacts/claude/{plan_id}_{task_id}_architect_manifest.json" in body
+    assert "--timeout 300" in body
     assert "--readonly" in body
     assert "python3 -m tools.pm_claude_delegation run" in body
+
+
+def test_claude_runner_command_allows_inner_command_override(monkeypatch):
+    monkeypatch.setenv(
+        "HERMES_PM_CLAUDE_COMMAND",
+        "python3 -m tools.pm_hermes_prompt_proxy --profile backend-specialist --model gpt-5.5 --provider openai-codex",
+    )
+    command = pm._claude_runner_command("plan_override", "t_override", "architect", "/tmp/project")
+
+    assert "python3 -m tools.pm_claude_delegation run" in command
+    assert "--command" in command
+    assert "tools.pm_hermes_prompt_proxy" in command
+    assert "--profile backend-specialist" in command
+    assert "--model gpt-5.5" in command
+    assert "claude -p" not in command
 
 
 def test_write_claude_runner_prompt_builds_implementer_prompt_and_internal_context(tmp_path):
@@ -698,7 +716,7 @@ def test_write_claude_runner_prompt_builds_implementer_prompt_and_internal_conte
     assert "--prompt-file .soul/prompts/plan_impl_t_impl_implementer.md" in context_text
 
 
-def test_architect_prompt_adds_conditional_api_sections_without_forcing_them_on_simple_work(tmp_path):
+def test_architect_prompt_file_is_pm_envelope_not_claude_execution_prompt(tmp_path):
     workspace = _workspace(tmp_path)
     api_result = pm._write_claude_runner_prompt(
         project_path=str(workspace),
@@ -711,30 +729,15 @@ def test_architect_prompt_adds_conditional_api_sections_without_forcing_them_on_
     )
     api_prompt = Path(api_result["prompt_path"]).read_text(encoding="utf-8")
 
-    assert "[인터페이스 계약]" in api_prompt
-    assert "[엣지 케이스]" in api_prompt
-    assert "[아키텍처 컨텍스트]" in api_prompt
-    assert "[대안 비교]" in api_prompt
-    assert "[사용자 확인 필요사항]" in api_prompt
-    assert "`## API / DTO 계약`" in api_prompt
-    assert "`## 검토한 대안`" in api_prompt
-
-    simple_result = pm._write_claude_runner_prompt(
-        project_path=str(workspace),
-        plan_id="plan_simple",
-        task_id="t_simple",
-        mode="architect",
-        request="README 문구 개선 방향만 설계해.",
-        task={"key": "T1", "title": "문서 문구 개선 설계", "body": "문서 표현 개선 방향만 정리한다."},
-        parent_ids=[],
-    )
-    simple_prompt = Path(simple_result["prompt_path"]).read_text(encoding="utf-8")
-
-    assert "[인터페이스 계약]" not in simple_prompt
-    assert "[엣지 케이스]" not in simple_prompt
-    assert "[아키텍처 컨텍스트]" not in simple_prompt
-    assert "`## API / DTO 계약`" not in simple_prompt
-    assert "[대안 비교]" in simple_prompt
+    assert "# Architect Task Envelope" in api_prompt
+    assert "Claude Code 실행 prompt가 아니다" in api_prompt
+    assert "GET /books API 설계" in api_prompt
+    assert "[인터페이스 계약]" not in api_prompt
+    assert "[엣지 케이스]" not in api_prompt
+    assert "[아키텍처 컨텍스트]" not in api_prompt
+    assert "[대안 비교]" not in api_prompt
+    assert "`## API / DTO 계약`" not in api_prompt
+    assert "세부 섹션 필요 여부와 구체 내용은 architect가 저장소와 요청을 보고 판단한다" in api_prompt
 
 
 def test_implementer_prompt_adds_api_contract_and_detailed_handoff_requirements(tmp_path):
@@ -761,7 +764,7 @@ def test_implementer_prompt_adds_api_contract_and_detailed_handoff_requirements(
 
 def test_claude_runner_prompt_uses_configured_command_in_internal_context(tmp_path, monkeypatch):
     workspace = _workspace(tmp_path)
-    monkeypatch.setenv("HERMES_PM_CLAUDE_COMMAND", "claude --print --max-turns 2")
+    monkeypatch.setenv("HERMES_PM_CLAUDE_COMMAND", "claude -p --max-turns 2 --strict-mcp-config --mcp-config '{\"mcpServers\":{}}' --disable-slash-commands")
 
     result = pm._write_claude_runner_prompt(
         project_path=str(workspace),
@@ -774,7 +777,10 @@ def test_claude_runner_prompt_uses_configured_command_in_internal_context(tmp_pa
     )
 
     context_text = Path(result["context_path"]).read_text(encoding="utf-8")
-    assert "--command 'claude --print --max-turns 2'" in context_text
+    assert "--command 'claude -p --max-turns 2" in context_text
+    assert "--strict-mcp-config" in context_text
+    assert '{\"mcpServers\":{}}' in context_text
+    assert "--disable-slash-commands" in context_text
     assert "--readonly" in context_text
 
 

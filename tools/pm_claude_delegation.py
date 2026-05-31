@@ -54,6 +54,29 @@ def _display_path(root: Path, path: Path) -> str:
         return str(path)
 
 
+def _runner_debug_log_path(manifest_path: Path) -> Path:
+    return manifest_path.with_suffix(".runner.log")
+
+
+def _write_runner_debug_log(manifest_path: Path, message: str) -> None:
+    path = _runner_debug_log_path(manifest_path)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
+
+
+def _timeout_output_to_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
 def _run_command(argv: list[str], prompt: str, root: Path, timeout: int) -> tuple[subprocess.CompletedProcess[str], float]:
     start = time.monotonic()
     completed = subprocess.run(
@@ -68,6 +91,21 @@ def _run_command(argv: list[str], prompt: str, root: Path, timeout: int) -> tupl
     return completed, time.monotonic() - start
 
 
+def _prepare_command_argv(command: str, *, readonly: bool) -> list[str]:
+    argv = shlex.split(command)
+    if not argv:
+        return []
+    if not readonly:
+        return argv
+    exe = Path(argv[0]).name.lower()
+    if exe != "claude":
+        return argv
+    policy_flags = {"--allowedTools", "--allowed-tools", "--disallowedTools", "--disallowed-tools", "--tools"}
+    if any(token in policy_flags or any(token.startswith(flag + "=") for flag in policy_flags) for token in argv[1:]):
+        return argv
+    return [*argv, "--allowedTools", "Read,Grep,Glob"]
+
+
 def _extract_required_architect_headings(prompt: str) -> list[str]:
     headings: list[str] = []
     for match in re.finditer(r"`(## [^`\n]+)`", prompt or ""):
@@ -75,6 +113,221 @@ def _extract_required_architect_headings(prompt: str) -> list[str]:
         if heading.startswith("## ") and heading not in headings:
             headings.append(heading)
     return headings or list(_FALLBACK_ARCHITECT_HEADINGS)
+
+
+def _format_prompt_section(title: str, lines: list[str]) -> list[str]:
+    return [title, *lines, ""]
+
+
+def _compact_text_excerpt(text: str, *, max_chars: int = 1200, max_lines: int = 40) -> str:
+    lines = []
+    for raw in (text or "").splitlines():
+        line = raw.rstrip()
+        if not line:
+            if lines and lines[-1] == "":
+                continue
+            lines.append("")
+            continue
+        lines.append(line)
+        if len(lines) >= max_lines:
+            break
+    excerpt = "\n".join(lines).strip()
+    if len(excerpt) > max_chars:
+        excerpt = excerpt[: max_chars - 1].rstrip() + "…"
+    return excerpt
+
+
+def _extract_pm_envelope_summary(envelope: str) -> list[str]:
+    text = str(envelope or "")
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    for raw in text.splitlines():
+        line = raw.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped == "```text" or stripped == "```":
+            continue
+        if stripped.startswith("[") and stripped.endswith("]"):
+            current = stripped
+            sections.setdefault(current, [])
+            continue
+        if current:
+            sections.setdefault(current, []).append(stripped)
+    summary: list[str] = []
+    for key in ("[작업 지시]", "[사용자 원 요청]", "[PM 전달 task body]"):
+        for line in sections.get(key, [])[:4]:
+            summary.append(line)
+    for line in sections.get("[운영 제약]", []):
+        if any(marker in line for marker in ("프로젝트 루트", "production 코드 루트", "read-only", "승인")):
+            summary.append(line)
+    if summary:
+        return summary[:12]
+    fallback: list[str] = []
+    for raw in text.splitlines():
+        stripped = raw.strip()
+        if not stripped or stripped == "```text" or stripped == "```":
+            continue
+        if stripped.startswith("[역할 경계]"):
+            continue
+        if stripped.startswith("- 이 파일은 PM이 작성한 작업 지시 envelope이다"):
+            continue
+        if stripped.startswith("- PM은 무엇을/어떤 제약으로 맡길지만 지정한다"):
+            continue
+        if stripped.startswith("- architect runner가 이 envelope를 해석해"):
+            continue
+        fallback.append(stripped)
+        if len(fallback) >= 12:
+            break
+    return fallback
+
+
+def _infer_architect_prompt_features(envelope: str) -> set[str]:
+    text = str(envelope or "")
+    lowered = text.lower()
+    features: set[str] = {"alternatives", "user_confirmation"}
+    interface_markers = (
+        "api", "endpoint", "dto", "contract", "interface", "request", "response",
+        "get", "post", "put", "patch", "delete", "http", "route", "handler",
+        "엔드포인트", "인터페이스", "계약", "요청", "응답", "입력", "출력", "함수", "이벤트",
+    )
+    tokens = set(re.findall(r"[a-z0-9_{}.-]+", lowered))
+    if (
+        any(marker in tokens for marker in interface_markers if marker.isascii())
+        or any(marker in lowered for marker in interface_markers if not marker.isascii())
+        or re.search(r"\b(GET|POST|PUT|PATCH|DELETE)\b|/[A-Za-z0-9_/{}/.-]+", text)
+    ):
+        features.add("interface")
+    edge_markers = (
+        "empty", "null", "unknown", "error", "exception", "404", "400", "500", "validation", "invalid",
+        "빈", "없", "오류", "예외", "검증", "경계", "엣지", "상태", "불가",
+    )
+    if any(marker in lowered for marker in edge_markers):
+        features.add("edge_cases")
+    architecture_markers = (
+        "src", "domain", "application", "infrastructure", "controller", "handler", "repository", "service",
+        "dependency", "di", "minimal api", "레이어", "아키텍처", "구조", "저장소", "서비스",
+    )
+    if any(marker in lowered for marker in architecture_markers):
+        features.add("architecture_context")
+    return features
+
+
+def _architect_output_headings(features: set[str]) -> list[str]:
+    headings = [
+        "## 상태",
+        "## 설계 요약",
+        "## 목표 / 범위",
+        "## 현황 분석",
+    ]
+    if "interface" in features:
+        headings.append("## API / DTO 계약")
+    headings.extend([
+        "## 검토한 대안",
+        "## 선택한 설계",
+        "## 영향 범위",
+        "## 구현 작업분해",
+        "## 검증 계획",
+        "## 리스크와 완화 방안",
+        "## 사용자 확인 필요사항",
+        "## 구현 승인 전제",
+    ])
+    return headings
+
+
+def _conditional_architect_prompt_sections(features: set[str]) -> list[str]:
+    sections: list[str] = []
+    if "interface" in features:
+        sections += _format_prompt_section("[인터페이스 계약]", [
+            "- API/함수/이벤트/입출력 경계가 있다면 method/path/input/output/error contract를 명시한다.",
+            "- 응답 필드명, 타입, null 허용 여부, 빈 결과 동작을 구분한다.",
+            "- 기존 호환성 또는 breaking change 여부를 확인한다.",
+        ])
+    if "edge_cases" in features:
+        sections += _format_prompt_section("[엣지 케이스]", [
+            "- 빈 결과, 존재하지 않는 대상, 잘못된 입력, null/unknown, 예외/오류 경로를 분리한다.",
+            "- 이번 승인 범위에서 처리할 항목과 후속 범위로 남길 항목을 구분한다.",
+        ])
+    if "architecture_context" in features:
+        sections += _format_prompt_section("[아키텍처 컨텍스트]", [
+            "- 기존 레이어/폴더/DI/테스트 구조를 먼저 관찰하고 그 패턴을 우선한다.",
+            "- 새 구조를 만들기보다 현재 경계 안에서 최소 변경을 우선한다.",
+        ])
+    sections += _format_prompt_section("[대안 비교]", [
+        "- 의미 있는 설계 대안 2개 이상을 비교한다. 대안이 1개뿐이면 그 이유를 적는다.",
+        "- 선택한 설계와 배제한 설계의 이유를 구현 영향/검증 난이도 기준으로 설명한다.",
+    ])
+    sections += _format_prompt_section("[사용자 확인 필요사항]", [
+        "- 구현 전 사용자가 결정해야 하는 사항과 구현자가 기본값으로 진행 가능한 사항을 분리한다.",
+        "- 확인 필요사항이 없으면 `없음`이라고 명시한다.",
+    ])
+    return sections
+
+
+def _build_architect_execution_prompt(*, envelope: str, root: Path, artifact_path: Path) -> str:
+    """Compose the actual Claude Code design prompt inside the architect runner."""
+    features = _infer_architect_prompt_features(envelope)
+    output_headings = _architect_output_headings(features)
+    sections: list[str] = ["# Claude Code Architect Delegation Prompt", ""]
+    sections += _format_prompt_section("[역할]", [
+        "- 너는 architect worker가 위임한 Claude Code 설계 실행자다.",
+        "- PM envelope는 작업 지시/제약/승인 조건만 담고 있다. 설계 접근, 조사 순서, 세부 Claude 실행 판단은 architect 책임으로 수행한다.",
+    ])
+    sections += _format_prompt_section("[핵심 작업 맥락]", _extract_pm_envelope_summary(envelope) or ["(empty)"])
+    sections += _format_prompt_section("[파일 경로]", [
+        f"- 프로젝트 루트: `{root}`",
+        "- production 코드 루트: `src` (envelope나 사용자 요청이 다르게 지정하면 그 지시를 우선한다)",
+        f"- 설계 산출물: `{_display_path(root, artifact_path)}`",
+    ])
+    sections += _conditional_architect_prompt_sections(features)
+    sections += _format_prompt_section("[제약 사항]", [
+        "- read-only architect 단계로 수행한다.",
+        "- production 코드와 테스트 코드를 수정하지 않는다.",
+        "- 사용자 승인 전 구현을 시작하지 않는다.",
+        "- 관측한 저장소 구조와 제공된 작업 맥락 근거만 사용한다.",
+    ])
+    sections += _format_prompt_section("[제외 사항]", [
+        "- 구현 코드 작성 제외",
+        "- 테스트 코드 작성 제외",
+        "- 승인 범위를 넘어선 기능 제안/리팩터링 제외",
+        "- manifest 또는 runner bookkeeping 위조 제외",
+    ])
+    sections += _format_prompt_section("[결과물 형식]", [
+        "- Claude runner는 최종 stdout을 artifact 파일로 저장한다. 따라서 최종 응답 자체가 완전한 markdown 설계 문서여야 한다.",
+        "- `설계 산출물을 작성 완료했다` 같은 상태 보고만 출력하지 말고, 아래 heading을 포함한 전체 artifact 본문을 stdout에 직접 작성한다.",
+        "- artifact에는 아래 heading을 포함한 한국어 markdown 설계 문서만 작성한다.",
+        "- 필수 heading은 정확히 `##` heading으로 작성하고, heading 체크리스트/요약표로 대체하지 않는다.",
+        "- 각 heading 아래에는 실제 판단 근거와 handoff 내용을 1개 이상 작성한다.",
+        "- 필수 heading: " + ", ".join(f"`{heading}`" for heading in output_headings),
+    ])
+    sections += _format_prompt_section("[완료 조건]", [
+        "- 필수 heading이 누락되지 않는다.",
+        "- 필수 heading을 체크리스트/요약표로만 언급하지 않고, 각 섹션 본문을 작성한다.",
+        "- 구현자가 바로 사용할 수 있는 영향 범위와 작업분해가 있다.",
+        "- 사용자 승인 전에 결정해야 할 사항이 분리되어 있다.",
+        "- 구현을 시작하지 않았음을 명시한다.",
+    ])
+    sections += _format_prompt_section("[검증 방법]", [
+        "- 관련 파일을 읽고 근거 파일/해석을 설계 문서에 반영한다.",
+        "- 요구사항, 제외 범위, 사용자 승인 전제를 서로 대조한다.",
+        "- 실행 검증이 불가능하면 그 제약을 리스크 또는 검증 계획에 명시한다.",
+    ])
+    sections += _format_prompt_section("[불확실성 처리]", [
+        "- 확정할 수 없는 항목은 추정해 구현 범위를 넓히지 않는다.",
+        "- 불확실한 계약/경로/정책은 사용자 확인 필요사항에 분리한다.",
+        "- 저장소 구조가 예상과 다르면 관측한 사실 기준으로만 설계한다.",
+    ])
+    return "\n".join(sections).rstrip() + "\n"
+
+
+def _write_composed_architect_prompt(root: Path, prompt_path: Path, prompt: str) -> Path:
+    try:
+        rel_parent = prompt_path.resolve().parent.relative_to(root.resolve())
+        out_dir = root / rel_parent / "internal"
+    except Exception:
+        out_dir = root / ".soul" / "prompts" / "internal"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{prompt_path.stem}_composed.md"
+    out_path.write_text(prompt, encoding="utf-8")
+    return out_path
 
 
 def _section_body(text: str, heading: str) -> str:
@@ -124,6 +377,8 @@ def _build_architect_repair_prompt(
     attempt: int,
 ) -> str:
     strictness = "" if attempt == 1 else "\n이것은 마지막 자동 재시도다. 각 heading 아래에는 최소 2개 bullet 또는 2문장 이상을 작성한다.\n"
+    prompt_excerpt = _compact_text_excerpt(original_prompt, max_chars=1400, max_lines=32)
+    artifact_excerpt = _compact_text_excerpt(failed_artifact, max_chars=1200, max_lines=28)
     return "\n".join([
         "# Architect Artifact Repair Prompt",
         "",
@@ -143,18 +398,18 @@ def _build_architect_repair_prompt(
         "- heading 체크리스트/요약표로 대체하지 않는다.",
         "- 구현 코드는 작성하지 않고, 사용자 승인 전 구현을 시작하지 않았음을 명시한다.",
         "",
+        "## 작업 맥락 요약",
+        "```text",
+        prompt_excerpt,
+        "```",
+        "",
+        "## 직전 잘못된 출력 일부",
+        "```markdown",
+        artifact_excerpt,
+        "```",
+        "",
         "## 필수 heading 순서",
         *[f"- `{heading}`" for heading in required_headings],
-        "",
-        "## 원래 작업 prompt",
-        "```text",
-        original_prompt,
-        "```",
-        "",
-        "## 실패한 이전 artifact",
-        "```markdown",
-        failed_artifact,
-        "```",
         "",
         f"이제 첫 글자부터 `{required_headings[0]}`를 출력한다. 다른 서문, 완료보고, 변경점 설명, 코드펜스 없이 설계 문서 본문만 출력한다.",
     ])
@@ -206,19 +461,38 @@ def _maybe_repair_architect_artifact(
         repair_stdout = repair_manifest.with_suffix(".stdout.txt")
         repair_stderr = repair_manifest.with_suffix(".stderr.txt")
         started_at = _now_iso()
-        completed, duration = _run_command(argv, repair_prompt, root, timeout)
+        _write_runner_debug_log(manifest, f"repair attempt {attempt} command start")
+        timed_out = False
+        timeout_seconds: int | None = None
+        try:
+            completed, duration = _run_command(argv, repair_prompt, root, timeout)
+        except subprocess.TimeoutExpired as exc:
+            duration = float(exc.timeout or timeout or 0)
+            timed_out = True
+            timeout_seconds = int(exc.timeout or timeout or 0)
+            completed = subprocess.CompletedProcess(
+                argv,
+                124,
+                stdout=_timeout_output_to_text(exc.output),
+                stderr=_timeout_output_to_text(exc.stderr),
+            )
+            _write_runner_debug_log(manifest, f"repair attempt {attempt} timed out timeout={timeout_seconds}")
+        if not timed_out:
+            _write_runner_debug_log(manifest, f"repair attempt {attempt} command finished rc={completed.returncode} duration={round(duration, 3)}")
         repair_artifact.parent.mkdir(parents=True, exist_ok=True)
         repair_artifact.write_text(completed.stdout or "", encoding="utf-8")
         repair_stdout.parent.mkdir(parents=True, exist_ok=True)
         repair_stdout.write_text(completed.stdout or "", encoding="utf-8")
         repair_stderr.write_text(completed.stderr or "", encoding="utf-8")
-        repair_status = "completed" if completed.returncode == 0 else "failed"
-        validation = _validate_architect_artifact_text(completed.stdout or "", required_headings) if completed.returncode == 0 else {
-            "ok": False,
-            "errors": [f"repair command exited {completed.returncode}"],
-            "missing_headings": [],
-            "empty_sections": [],
-        }
+        repair_status = "timeout" if timed_out else ("completed" if completed.returncode == 0 else "failed")
+        validation = {"ok": False, "errors": [f"repair command timed out after {timeout_seconds}s"], "missing_headings": [], "empty_sections": []} if timed_out else (
+            _validate_architect_artifact_text(completed.stdout or "", required_headings) if completed.returncode == 0 else {
+                "ok": False,
+                "errors": [f"repair command exited {completed.returncode}"],
+                "missing_headings": [],
+                "empty_sections": [],
+            }
+        )
         repair_data = {
             "version": 1,
             "runner": "pm_claude_delegation",
@@ -243,6 +517,8 @@ def _maybe_repair_architect_artifact(
             "readonly": bool(readonly),
             "artifact_contract_validation": validation,
         }
+        if timed_out:
+            repair_data["timeout_seconds"] = timeout_seconds or timeout
         _write_manifest(repair_manifest, repair_data)
         attempt_record = {
             "attempt": attempt,
@@ -255,6 +531,8 @@ def _maybe_repair_architect_artifact(
             "validation": validation,
         }
         attempts.append(attempt_record)
+        if timed_out:
+            return {"ok": False, "attempts": attempts, "final_validation": validation}
         if completed.returncode == 0 and validation.get("ok"):
             artifact.write_text(completed.stdout or "", encoding="utf-8")
             return {"ok": True, "attempts": attempts, "final_validation": validation, "final_stdout_path": str(repair_stdout), "final_stderr_path": str(repair_stderr)}
@@ -290,14 +568,37 @@ def run_delegation(
     manifest = _as_path(root, manifest_path)
     stdout_path = manifest.with_suffix(".stdout.txt")
     stderr_path = manifest.with_suffix(".stderr.txt")
-    prompt = prompt_path.read_text(encoding="utf-8")
-    argv = shlex.split(command)
+    _write_runner_debug_log(manifest, f"run_delegation begin mode={mode} plan_id={plan_id} task_id={task_id} prompt_file={prompt_file}")
+    source_prompt = prompt_path.read_text(encoding="utf-8")
+    prompt = source_prompt
+    composed_prompt_path: Path | None = None
+    if mode == "architect" and output_format == "design":
+        prompt = _build_architect_execution_prompt(envelope=source_prompt, root=root, artifact_path=artifact)
+        composed_prompt_path = _write_composed_architect_prompt(root, prompt_path, prompt)
+    argv = _prepare_command_argv(command, readonly=readonly)
     if not argv:
         raise ValueError("command is required")
 
     started_at = _now_iso()
-    completed, duration = _run_command(argv, prompt, root, timeout)
-    status = "completed" if completed.returncode == 0 else "failed"
+    _write_runner_debug_log(manifest, f"command start argv={argv}")
+    timed_out = False
+    timeout_seconds: int | None = None
+    try:
+        completed, duration = _run_command(argv, prompt, root, timeout)
+    except subprocess.TimeoutExpired as exc:
+        duration = float(exc.timeout or timeout or 0)
+        timed_out = True
+        timeout_seconds = int(exc.timeout or timeout or 0)
+        completed = subprocess.CompletedProcess(
+            argv,
+            124,
+            stdout=_timeout_output_to_text(exc.output),
+            stderr=_timeout_output_to_text(exc.stderr),
+        )
+        _write_runner_debug_log(manifest, f"command timed out timeout={timeout_seconds}")
+    if not timed_out:
+        _write_runner_debug_log(manifest, f"command finished rc={completed.returncode} duration={round(duration, 3)} stdout_chars={len(completed.stdout or '')} stderr_chars={len(completed.stderr or '')}")
+    status = "timeout" if timed_out else ("completed" if completed.returncode == 0 else "failed")
 
     artifact.parent.mkdir(parents=True, exist_ok=True)
     if completed.stdout:
@@ -366,6 +667,11 @@ def run_delegation(
         "allowed_paths": list(allowed_paths or []),
         "readonly": bool(readonly),
     }
+    if composed_prompt_path is not None:
+        data["composed_prompt_file"] = _display_path(root, composed_prompt_path)
+        data["prompt_composition"] = "architect_runner"
+    if timed_out:
+        data["timeout_seconds"] = timeout_seconds or timeout
     if artifact_validation is not None:
         data["artifact_contract_validation"] = artifact_validation
     if repair_result is not None:
@@ -375,7 +681,9 @@ def run_delegation(
             "attempts": repair_result.get("attempts") or [],
             "ok": bool(repair_result.get("ok")),
         }
+    _write_runner_debug_log(manifest, f"manifest write status={status} exit_code={completed_at_exit_code}")
     _write_manifest(manifest, data)
+    _write_runner_debug_log(manifest, "run_delegation end")
     return {"ok": status in _SUCCESS_STATUSES, "manifest_path": str(manifest), "artifact_path": str(artifact), "manifest": data}
 
 

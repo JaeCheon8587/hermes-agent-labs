@@ -3358,6 +3358,25 @@ def _notify_pm_workflow_completion(conn: sqlite3.Connection, task_id: str) -> No
                 )
 
 
+def _notify_pm_workflow_blocked(conn: sqlite3.Connection, task_id: str) -> None:
+    """Best-effort bridge from Kanban blocking to PM workflow state sync."""
+    try:
+        from tools.pm_workflow_tool import handle_blocked_pm_workflow_task
+    except Exception:
+        return
+    try:
+        handle_blocked_pm_workflow_task(conn, task_id)
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            with write_txn(conn):
+                _append_event(
+                    conn,
+                    task_id,
+                    "pm_workflow_block_hook_failed",
+                    {"error": str(exc)[:500]},
+                )
+
+
 # ---------------------------------------------------------------------------
 # Workspace / tmux cleanup
 # ---------------------------------------------------------------------------
@@ -3713,7 +3732,8 @@ def block_task(
                 summary=reason,
             )
         _append_event(conn, task_id, "blocked", {"reason": reason}, run_id=run_id)
-        return True
+    _notify_pm_workflow_blocked(conn, task_id)
+    return True
 
 
 
@@ -6095,6 +6115,42 @@ def _extract_pm_claude_runner_command(body: Optional[str]) -> Optional[str]:
     return command or None
 
 
+def _recover_pm_claude_runner_command(task: Task, workspace: str) -> Optional[str]:
+    try:
+        from tools import pm_workflow_tool as pm
+    except Exception:
+        return None
+    try:
+        data = pm._load_plans(profile="project_manager")
+    except Exception:
+        return None
+    plans = data.get("plans") if isinstance(data, dict) else None
+    if not isinstance(plans, dict):
+        return None
+    for plan_id, plan in plans.items():
+        if not isinstance(plan, dict):
+            continue
+        rows = []
+        for field in ("created_design_tasks", "created_tasks", "created_followup_tasks"):
+            value = plan.get(field) or []
+            if isinstance(value, list):
+                rows.extend(item for item in value if isinstance(item, dict))
+        for row in rows:
+            if str(row.get("task_id") or "").strip() != task.id:
+                continue
+            mode = str(row.get("mode") or "").strip() or str(getattr(task, "mode", "") or "").strip()
+            if not mode:
+                continue
+            project_path = str(row.get("workspace_path") or plan.get("project_path") or workspace or "").strip()
+            if not project_path:
+                continue
+            try:
+                return pm._claude_runner_command(str(plan_id), task.id, mode, project_path)
+            except Exception:
+                return None
+    return None
+
+
 def _prepend_pythonpath(env: dict[str, str], path: str) -> None:
     current = env.get("PYTHONPATH", "").strip()
     parts = [p for p in current.split(os.pathsep) if p]
@@ -6130,6 +6186,8 @@ def _default_spawn(
     profile_arg = normalize_profile_name(task.assignee)
 
     runner_command = _extract_pm_claude_runner_command(task.body)
+    if not runner_command:
+        runner_command = _recover_pm_claude_runner_command(task, workspace)
     prompt = f"work kanban task {task.id}"
     if runner_command:
         prompt = "\n\n".join([

@@ -1567,29 +1567,6 @@ def _conditional_claude_prompt_sections(*, mode: str, features: set[str]) -> lis
     return sections
 
 
-def _architect_output_heading_lines(features: set[str]) -> list[str]:
-    headings = [
-        "## 상태",
-        "## 설계 요약",
-        "## 목표 / 범위",
-        "## 현황 분석",
-    ]
-    if "interface" in features:
-        headings.append("## API / DTO 계약")
-    if "alternatives" in features:
-        headings.append("## 검토한 대안")
-    headings.extend([
-        "## 선택한 설계",
-        "## 영향 범위",
-        "## 구현 작업분해",
-        "## 검증 계획",
-        "## 리스크와 완화 방안",
-        "## 사용자 확인 필요사항",
-        "## 구현 승인 전제",
-    ])
-    return headings
-
-
 def _build_architect_delegation_prompt(
     *,
     project_path: str,
@@ -1597,62 +1574,39 @@ def _build_architect_delegation_prompt(
     task: dict[str, Any],
     paths: dict[str, str],
 ) -> str:
+    """Build the PM-to-architect task envelope, not the Claude execution prompt.
+
+    The PM owns routing, scope, approval boundaries, and artifact locations.
+    The architect runner owns the actual Claude Code prompt composition so the
+    architect remains responsible for analysis strategy and design judgment.
+    """
     title = _task_text(task, "title", "설계 작업")
-    work_context = _claude_prompt_work_context(request, task) or "현재 task 제목과 저장소 구조를 기준으로 설계와 작업분해 산출물을 작성한다."
-    features = _infer_claude_prompt_features(mode="architect", request=request, task=task)
-    output_headings = _architect_output_heading_lines(features)
-    sections: list[str] = ["# Claude Code Architect Delegation Prompt", ""]
-    sections += _format_prompt_section("[작업 목표]", [
-        f"- `{title}`에 대한 설계/작업분해 산출물을 작성한다.",
-        "- 다음 implementer와 PM이 승인 판단에 사용할 수 있는 구조화된 handoff 문서를 만든다.",
-        "- 구현은 시작하지 않는다.",
+    body = _task_text(task, "body", "(no extra task body)")
+    sections: list[str] = ["# Architect Task Envelope", ""]
+    sections += _format_prompt_section("[역할 경계]", [
+        "- 이 파일은 PM이 작성한 작업 지시 envelope이다. Claude Code 실행 prompt가 아니다.",
+        "- PM은 무엇을/어떤 제약으로 맡길지만 지정한다.",
+        "- architect runner가 이 envelope를 해석해 Claude Code 설계 prompt를 직접 구성한다.",
     ])
-    sections += _format_prompt_section("[작업 내용]", [
-        "- 아래 작업 맥락을 기준으로 산출물을 작성한다.",
-        work_context,
+    sections += _format_prompt_section("[작업 지시]", [
+        f"- 제목: {title}",
+        "- 단계: architect design only",
+        "- 목표: 설계/작업분해/검증계획 산출물을 작성해 PM의 사용자 승인 요청에 제공한다.",
     ])
-    sections += _format_prompt_section("[파일 경로]", [
+    sections += _format_prompt_section("[사용자 원 요청]", [request.strip() or "(empty)"])
+    sections += _format_prompt_section("[PM 전달 task body]", [body])
+    sections += _format_prompt_section("[운영 제약]", [
         f"- 프로젝트 루트: `{project_path}`",
         "- production 코드 루트: `src` (사용자 요청 또는 task body가 다르게 지정하면 그 지시를 우선한다)",
-        f"- 설계 산출물: `{paths['artifact']}`",
-    ])
-    sections += _conditional_claude_prompt_sections(mode="architect", features=features)
-    sections += _format_prompt_section("[제약 사항]", [
         "- read-only architect 단계로 수행한다.",
         "- production 코드와 테스트 코드를 수정하지 않는다.",
         "- 사용자 승인 전 구현을 시작하지 않는다.",
-        "- 관측한 저장소 구조와 제공된 작업 맥락 근거만 사용한다.",
     ])
-    sections += _format_prompt_section("[제외 사항]", [
-        "- 구현 코드 작성 제외",
-        "- 테스트 코드 작성 제외",
-        "- 승인 범위를 넘어선 기능 제안/리팩터링 제외",
-        "- manifest 또는 runner bookkeeping 위조 제외",
-    ])
-    sections += _format_prompt_section("[결과물 형식]", [
-        "- Claude runner는 최종 stdout을 artifact 파일로 저장한다. 따라서 최종 응답 자체가 완전한 markdown 설계 문서여야 한다.",
-        "- `설계 산출물을 작성 완료했다` 같은 상태 보고만 출력하지 말고, 아래 heading을 포함한 전체 artifact 본문을 stdout에 직접 작성한다.",
-        "- artifact에는 아래 heading을 포함한 한국어 markdown 설계 문서만 작성한다.",
-        "- 필수 heading은 정확히 `##` heading으로 작성하고, heading 체크리스트/요약표로 대체하지 않는다.",
-        "- 각 heading 아래에는 실제 판단 근거와 handoff 내용을 1개 이상 작성한다.",
-        "- 필수 heading: " + ", ".join(f"`{heading}`" for heading in output_headings),
-    ])
-    sections += _format_prompt_section("[완료 조건]", [
-        "- 필수 heading이 누락되지 않는다.",
-        "- 필수 heading을 체크리스트/요약표로만 언급하지 않고, 각 섹션 본문을 작성한다.",
-        "- 구현자가 바로 사용할 수 있는 영향 범위와 작업분해가 있다.",
-        "- 사용자 승인 전에 결정해야 할 사항이 분리되어 있다.",
-        "- 구현을 시작하지 않았음을 명시한다.",
-    ])
-    sections += _format_prompt_section("[검증 방법]", [
-        "- 관련 파일을 읽고 근거 파일/해석을 설계 문서에 반영한다.",
-        "- 요구사항, 제외 범위, 사용자 승인 전제를 서로 대조한다.",
-        "- 실행 검증이 불가능하면 그 제약을 리스크 또는 검증 계획에 명시한다.",
-    ])
-    sections += _format_prompt_section("[불확실성 처리]", [
-        "- 확정할 수 없는 항목은 추정해 구현 범위를 넓히지 않는다.",
-        "- 불확실한 계약/경로/정책은 사용자 확인 필요사항에 분리한다.",
-        "- 저장소 구조가 예상과 다르면 관측한 사실 기준으로만 설계한다.",
+    sections += _format_prompt_section("[산출물/게이트]", [
+        f"- 설계 산출물 경로: `{paths['artifact']}`",
+        "- 산출물은 PM/implementer/reviewer가 handoff로 사용할 수 있는 한국어 markdown 설계 문서여야 한다.",
+        "- 필수 산출물 종류: 상태, 설계 요약, 목표/범위, 현황 분석, 선택한 설계, 영향 범위, 구현 작업분해, 검증 계획, 리스크, 사용자 확인 필요사항, 구현 승인 전제.",
+        "- API/DTO/인터페이스 계약 등 세부 섹션 필요 여부와 구체 내용은 architect가 저장소와 요청을 보고 판단한다.",
     ])
     return "\n".join(sections).rstrip() + "\n"
 
@@ -1741,6 +1695,18 @@ def _build_claude_delegation_prompt(
     ]) + "\n"
 
 
+def _claude_runner_timeout_seconds() -> int:
+    raw = os.environ.get("HERMES_PM_CLAUDE_RUNNER_TIMEOUT", "").strip()
+    if raw:
+        try:
+            parsed = int(raw)
+        except ValueError:
+            parsed = 0
+        if parsed > 0:
+            return parsed
+    return 300
+
+
 def _claude_runner_command(plan_id: str, task_id: str, mode: str, project_path: str) -> str:
     paths = _claude_runner_paths(plan_id, task_id, mode)
     parts = [
@@ -1749,11 +1715,12 @@ def _claude_runner_command(plan_id: str, task_id: str, mode: str, project_path: 
         "--plan-id", plan_id,
         "--task-id", task_id,
         "--workdir", project_path,
-        "--command", os.environ.get("HERMES_PM_CLAUDE_COMMAND", "claude --print"),
+        "--command", os.environ.get("HERMES_PM_CLAUDE_COMMAND", "claude -p --max-turns 8 --strict-mcp-config --mcp-config '{\"mcpServers\":{}}' --disable-slash-commands"),
         "--prompt-file", paths["prompt"],
         "--output-format", paths["output_format"],
         "--artifact-path", paths["artifact"],
         "--manifest-path", paths["manifest"],
+        "--timeout", str(_claude_runner_timeout_seconds()),
     ]
     if mode == "architect":
         parts.append("--readonly")
@@ -3086,6 +3053,44 @@ def handle_completed_pm_workflow_task(conn: Any, task_id: str, *, profile: str =
         info["actions"].append("recorded_final_report")
     else:
         info["actions"].append("no_transition")
+    data.setdefault("plans", {})[plan_id] = plan
+    _save_plans(data, profile)
+    return info
+
+
+def handle_blocked_pm_workflow_task(conn: Any, task_id: str, *, profile: str = "project_manager") -> dict[str, Any]:
+    data, plan_id, plan, phase = _find_plan_for_task(profile, task_id)
+    if not data or not plan_id or not isinstance(plan, dict):
+        return {"ok": False, "reason": "task not tracked by PM workflow", "task_id": task_id}
+    plan = _ensure_plan_workflow_fields(plan)
+    _update_cached_created_task_status(plan, task_id, "blocked")
+    now = int(time.time())
+    summary = _task_summary_from_conn(conn, task_id) or ""
+    plan["last_blocked_task"] = {
+        "task_id": task_id,
+        "phase": phase,
+        "summary": summary,
+        "blocked_at": now,
+    }
+    plan["updated_at"] = now
+    info: dict[str, Any] = {"ok": True, "plan_id": plan_id, "task_id": task_id, "phase": phase, "actions": []}
+    if phase == "architect":
+        plan["design_status"] = "blocked"
+        if summary:
+            plan["design_summary"] = summary
+        info["actions"].append("recorded_design_block")
+    elif phase == "reviewer":
+        plan["review_status"] = "blocked"
+        if summary:
+            plan["review_summary"] = summary
+        info["actions"].append("recorded_review_block")
+    elif phase == "final":
+        plan["final_status"] = "blocked"
+        if summary:
+            plan["final_summary"] = summary
+        info["actions"].append("recorded_final_block")
+    else:
+        info["actions"].append("recorded_block")
     data.setdefault("plans", {})[plan_id] = plan
     _save_plans(data, profile)
     return info

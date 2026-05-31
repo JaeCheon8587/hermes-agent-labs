@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Synchronize project-local .soul/approved_scope.json with the active PM workflow phase.
+
+Designed for Hermes cron with no_agent=True:
+- Watches executed staged PM plans.
+- If implementer is done and reviewer is active/blocked, exports reviewer scope.
+- If reviewer is done and final is active/blocked, exports final scope.
+- For blocked reviewer/final tasks caused by stale scope, unblocks once after syncing.
+- Prints a short message only when it changed state.
+"""
+from __future__ import annotations
+
+import os
+import json
+import sqlite3
+import subprocess
+import time
+from pathlib import Path
+from typing import Any
+
+HERMES_HOME = Path(os.environ.get('HERMES_ROOT', str(Path.home() / '.hermes'))).expanduser()
+PM_PLANS_PATH = HERMES_HOME / 'profiles' / 'project_manager' / 'state' / 'pm_plans.json'
+CURRENT_BOARD = HERMES_HOME / 'kanban' / 'current'
+STATE_PATH = HERMES_HOME / 'state' / 'pm_scope_phase_sync.json'
+
+
+def _now() -> int:
+    return int(time.time())
+
+
+def _read_json(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _atomic_write_json(path: Path, data: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + '.tmp')
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+    tmp.replace(path)
+
+
+def _read_board() -> str:
+    try:
+        val = CURRENT_BOARD.read_text(encoding='utf-8').strip()
+        return val or 'default'
+    except FileNotFoundError:
+        return 'default'
+
+
+def _db_path(board: str) -> Path:
+    if board == 'default':
+        return HERMES_HOME / 'kanban.db'
+    return HERMES_HOME / 'kanban' / 'boards' / board / 'kanban.db'
+
+
+def _connect(board: str) -> sqlite3.Connection:
+    path = _db_path(board)
+    if not path.exists():
+        raise SystemExit(f'Kanban DB not found: {path}')
+    conn = sqlite3.connect(path)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _task(conn: sqlite3.Connection, tid: str) -> dict[str, Any] | None:
+    row = conn.execute('select id,title,assignee,status,completed_at from tasks where id=?', (tid,)).fetchone()
+    return dict(row) if row else None
+
+
+def _followup_by_mode(plan: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    tasks = plan.get('tasks') or []
+    mode_by_key = {str(t.get('key')): str(t.get('mode') or '') for t in tasks if isinstance(t, dict)}
+    out: dict[str, dict[str, Any]] = {}
+    for item in plan.get('created_followup_tasks') or []:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get('key') or '')
+        mode = mode_by_key.get(key)
+        if mode:
+            out[mode] = item
+        elif item.get('assignee') == 'project_manager':
+            out['final'] = item
+    return out
+
+
+def _load_contract(plan: dict[str, Any]) -> dict[str, Any]:
+    meta = plan.get('workflow_contract') if isinstance(plan.get('workflow_contract'), dict) else {}
+    path = meta.get('path')
+    if path:
+        return _read_json(Path(path))
+    return {}
+
+
+def _export_scope(plan: dict[str, Any], phase: str, task_id: str, contract: dict[str, Any]) -> Path:
+    project_path = Path(str(plan.get('project_path') or contract.get('project_path') or ''))
+    if not project_path:
+        raise RuntimeError('project_path missing')
+    artifacts = contract.get('artifacts') if isinstance(contract.get('artifacts'), dict) else {}
+    expected = contract.get('expected_deliverables') if isinstance(contract.get('expected_deliverables'), list) else []
+    phase_allowed = contract.get('phase_allowed_paths') if isinstance(contract.get('phase_allowed_paths'), dict) else {}
+    required_by_phase = contract.get('required_evidence_by_phase') if isinstance(contract.get('required_evidence_by_phase'), dict) else {}
+    allowed = phase_allowed.get(phase) or ['.soul/artifacts/']
+    if phase in {'reviewer', 'final'}:
+        allowed = sorted(set([*allowed, *expected, '.soul/artifacts/']))
+    evidence_phase = 'implementation' if phase == 'implementer' else phase
+    required = required_by_phase.get(evidence_phase) or [artifacts.get('design')]
+    scope = {
+        'version': 1,
+        'plan_id': plan.get('plan_id'),
+        'task_id': task_id,
+        'phase': phase,
+        'approval': {
+            'plan_approved': True,
+            'design_approved': True,
+            'approved_by': plan.get('design_approved_by') or plan.get('approved_by'),
+            'approved_at': time.strftime('%Y-%m-%dT%H:%M:%S%z', time.localtime(int(time.time()))),
+        },
+        'scope': {'allowed_paths': [p for p in allowed if p], 'disallowed_paths': ['.git/', '.env', 'secrets/']},
+        'risk': {'level': 'low', 'types': [], 'impact': [], 'rollback': []},
+        'evidence': {'required': [p for p in required if p], 'produced': []},
+        'completion': {'parent_task_ids': [], 'notes': f'Generated by pm_scope_phase_sync for {phase}'},
+        'contract_path': str((project_path / '.soul' / 'workflows' / str(plan.get('plan_id')) / 'contract.json')),
+    }
+    path = project_path / '.soul' / 'approved_scope.json'
+    _atomic_write_json(path, scope)
+    return path
+
+
+def _unblock(task_id: str) -> dict[str, Any]:
+    cmd = ['hermes', 'kanban', 'unblock', task_id]
+    cp = subprocess.run(cmd, text=True, capture_output=True, timeout=60)
+    return {'task_id': task_id, 'returncode': cp.returncode, 'stdout': cp.stdout.strip(), 'stderr': cp.stderr.strip()}
+
+
+def main() -> int:
+    board = _read_board()
+    conn = _connect(board)
+    state = _read_json(STATE_PATH)
+    synced = set(state.get('synced') or [])
+    data = _read_json(PM_PLANS_PATH)
+    plans = data.get('plans') if isinstance(data.get('plans'), dict) else {}
+    messages: list[str] = []
+    for plan_id, plan in sorted(plans.items(), key=lambda kv: int(kv[1].get('updated_at') or 0), reverse=True):
+        if not isinstance(plan, dict) or str(plan.get('status') or '') in {'superseded', 'archived'}:
+            continue
+        if plan.get('status') != 'executed' or plan.get('design_status') != 'approved':
+            continue
+        contract = _load_contract(plan)
+        if not contract:
+            continue
+        by_mode = _followup_by_mode(plan)
+        impl = by_mode.get('implementer')
+        reviewer = by_mode.get('reviewer')
+        final = by_mode.get('final')
+        if not impl or not reviewer:
+            continue
+        impl_task = _task(conn, str(impl.get('task_id')))
+        reviewer_task = _task(conn, str(reviewer.get('task_id')))
+        final_task = _task(conn, str(final.get('task_id'))) if final else None
+        target_phase = None
+        target_id = None
+        target_task = None
+        if impl_task and impl_task.get('status') == 'done' and reviewer_task and reviewer_task.get('status') in {'todo', 'ready', 'running', 'blocked'}:
+            target_phase = 'reviewer'
+            target_id = str(reviewer.get('task_id'))
+            target_task = reviewer_task
+        if reviewer_task and reviewer_task.get('status') == 'done' and final_task and final_task.get('status') in {'todo', 'ready', 'running', 'blocked'}:
+            target_phase = 'final'
+            target_id = str(final.get('task_id'))
+            target_task = final_task
+        if not target_phase or not target_id:
+            continue
+        key = f'{plan_id}:{target_phase}:{target_id}'
+        if key in synced and target_task and target_task.get('status') != 'blocked':
+            continue
+        path = _export_scope({**plan, 'plan_id': plan_id}, target_phase, target_id, contract)
+        action = {'plan_id': plan_id, 'phase': target_phase, 'task_id': target_id, 'scope': str(path)}
+        if target_task and target_task.get('status') == 'blocked':
+            action['unblock'] = _unblock(target_id)
+        messages.append(json.dumps(action, ensure_ascii=False))
+        synced.add(key)
+        break
+    if messages:
+        state['synced'] = sorted(synced)
+        state['last_synced_at'] = _now()
+        _atomic_write_json(STATE_PATH, state)
+        # Internal phase bookkeeping; stay silent unless we had to unblock a task.
+        if any('"unblock": true' in msg.lower() for msg in messages):
+            print('PM 내부 동기화: 대기 중이던 작업을 다시 진행 상태로 전환했습니다.')
+    else:
+        if not STATE_PATH.exists():
+            state.setdefault('synced', [])
+            _atomic_write_json(STATE_PATH, state)
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

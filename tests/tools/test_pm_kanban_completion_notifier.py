@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path('/home/jjc/.hermes/scripts/pm_kanban_completion_notifier.py')
+SCRIPT = Path(__file__).resolve().parents[2] / 'scripts' / 'pm-workflow' / 'pm_kanban_completion_notifier.py'
 
 
 @pytest.fixture

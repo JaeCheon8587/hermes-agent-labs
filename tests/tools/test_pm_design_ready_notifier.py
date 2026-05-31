@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path('/home/jjc/.hermes/scripts/pm_design_ready_notifier.py')
+SCRIPT = Path(__file__).resolve().parents[2] / 'scripts' / 'pm-workflow' / 'pm_design_ready_notifier.py'
 
 
 @pytest.fixture

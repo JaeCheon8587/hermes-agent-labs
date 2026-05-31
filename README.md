@@ -50,12 +50,14 @@ Skip the setup wizard if you already have Hermes configuration:
 curl -fsSL https://raw.githubusercontent.com/JaeCheon8587/hermes-agent-labs/local/pm-workflow-hardening/scripts/install-labs.sh | bash -s -- --skip-setup
 ```
 
-The wrapper clones or updates `git@github.com:JaeCheon8587/hermes-agent-labs.git` at `local/pm-workflow-hardening`, then delegates to the standard `scripts/install.sh`. If SSH is not configured on the target machine, override the clone URL with HTTPS:
+The wrapper clones or updates `git@github.com:JaeCheon8587/hermes-agent-labs.git` at `local/pm-workflow-hardening`, delegates to the standard `scripts/install.sh`, then syncs PM/Kanban runtime helper scripts into `~/.hermes/scripts/`. If SSH is not configured on the target machine, override the clone URL with HTTPS:
 
 ```bash
 HERMES_LABS_REPO=https://github.com/JaeCheon8587/hermes-agent-labs.git \
   curl -fsSL https://raw.githubusercontent.com/JaeCheon8587/hermes-agent-labs/local/pm-workflow-hardening/scripts/install-labs.sh | bash
 ```
+
+For PM/Kanban operating-environment bootstrap, cron notifier setup, and update workflow, see [`docs/labs-pm-kanban-operating-environment.md`](docs/labs-pm-kanban-operating-environment.md).
 
 ### Windows (native, PowerShell) — Early Beta
 

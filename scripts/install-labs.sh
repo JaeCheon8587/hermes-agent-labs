@@ -52,4 +52,13 @@ fi
 success "Checkout ready: $DIR"
 log "Running Hermes installer from labs checkout"
 
-exec bash "$DIR/scripts/install.sh" --dir "$DIR" --branch "$BRANCH" "$@"
+bash "$DIR/scripts/install.sh" --dir "$DIR" --branch "$BRANCH" "$@"
+
+if [ "${HERMES_LABS_SYNC_PM_RUNTIME:-1}" != "0" ]; then
+    log "Syncing PM/Kanban runtime helper scripts"
+    bash "$DIR/scripts/sync-pm-workflow-runtime.sh"
+else
+    log "Skipping PM/Kanban runtime helper sync because HERMES_LABS_SYNC_PM_RUNTIME=0"
+fi
+
+success "Labs install complete"

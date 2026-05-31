@@ -3107,6 +3107,54 @@ class HallucinatedCardsError(ValueError):
         )
 
 
+class WorkflowCompletionBlockedError(ValueError):
+    """Raised when a PM workflow completion gate rejects the attempt."""
+
+    def __init__(self, task_id: str, errors: list[str], gate: dict | None = None):
+        self.task_id = task_id
+        self.errors = list(errors)
+        self.gate = gate or {}
+        super().__init__("completion blocked by PM workflow contract: " + "; ".join(self.errors))
+
+
+def _validate_pm_workflow_completion_gate(
+    conn: sqlite3.Connection,
+    task_id: str,
+    metadata: Optional[dict],
+    summary: Optional[str],
+    result: Optional[str],
+) -> None:
+    try:
+        from tools.pm_workflow_tool import validate_task_completion_gate
+    except Exception:
+        return
+    try:
+        gate = validate_task_completion_gate(conn, task_id, metadata)
+    except Exception:
+        return
+    if not isinstance(gate, dict) or gate.get("ok", True):
+        return
+    errors = [str(item) for item in (gate.get("errors") or []) if str(item).strip()]
+    if not errors:
+        errors = ["PM workflow completion gate rejected this task"]
+    with write_txn(conn):
+        _append_event(
+            conn,
+            task_id,
+            "completion_blocked_pm_workflow_contract",
+            {
+                "errors": errors,
+                "gate": gate,
+                "summary_preview": (
+                    (summary or result or "").strip().splitlines()[0][:200]
+                    if (summary or result)
+                    else None
+                ),
+            },
+        )
+    raise WorkflowCompletionBlockedError(task_id, errors, gate)
+
+
 def complete_task(
     conn: sqlite3.Connection,
     task_id: str,
@@ -3146,6 +3194,7 @@ def complete_task(
     and never blocks.
     """
     now = int(time.time())
+    _validate_pm_workflow_completion_gate(conn, task_id, metadata, summary, result)
 
     # Gate: verify created_cards BEFORE the main write txn. A rejected
     # completion still needs an auditable event, so we emit it in a
@@ -3284,9 +3333,29 @@ def complete_task(
     _clear_failure_counter(conn, task_id)
     # Recompute ready status for dependents (separate txn so children see done).
     recompute_ready(conn)
+    _notify_pm_workflow_completion(conn, task_id)
     # Clean up the scratch workspace and any stale tmux session for the worker.
     _cleanup_workspace(conn, task_id)
     return True
+
+
+def _notify_pm_workflow_completion(conn: sqlite3.Connection, task_id: str) -> None:
+    """Best-effort bridge from Kanban completion to PM workflow phase transitions."""
+    try:
+        from tools.pm_workflow_tool import handle_completed_pm_workflow_task
+    except Exception:
+        return
+    try:
+        handle_completed_pm_workflow_task(conn, task_id)
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            with write_txn(conn):
+                _append_event(
+                    conn,
+                    task_id,
+                    "pm_workflow_completion_hook_failed",
+                    {"error": str(exc)[:500]},
+                )
 
 
 # ---------------------------------------------------------------------------
@@ -6008,6 +6077,32 @@ def _worker_terminal_timeout_env(
     return str(desired)
 
 
+def _extract_pm_claude_runner_command(body: Optional[str]) -> Optional[str]:
+    """Return the mandatory PM Claude runner command embedded in a task body."""
+    text = (body or "").strip()
+    if "[Python Claude runner 실행 명령]" not in text:
+        return None
+    match = re.search(
+        r"\[Python Claude runner 실행 명령\].*?```(?:bash|sh)?\s*(.*?)```",
+        text,
+        flags=re.DOTALL,
+    )
+    if not match:
+        return None
+    command = match.group(1).strip()
+    if "pm_claude_delegation" not in command:
+        return None
+    return command or None
+
+
+def _prepend_pythonpath(env: dict[str, str], path: str) -> None:
+    current = env.get("PYTHONPATH", "").strip()
+    parts = [p for p in current.split(os.pathsep) if p]
+    if path not in parts:
+        parts.insert(0, path)
+    env["PYTHONPATH"] = os.pathsep.join(parts)
+
+
 def _default_spawn(
     task: Task,
     workspace: str,
@@ -6034,7 +6129,15 @@ def _default_spawn(
 
     profile_arg = normalize_profile_name(task.assignee)
 
+    runner_command = _extract_pm_claude_runner_command(task.body)
     prompt = f"work kanban task {task.id}"
+    if runner_command:
+        prompt = "\n\n".join([
+            prompt,
+            "Dispatcher startup will automatically run the mandatory PM Claude runner command before this Hermes worker turn begins.",
+            "Do not re-run the runner unless the manifest/artifact is missing or the startup log says it failed.",
+            "After startup, inspect the generated manifest/artifact, then complete or block the Kanban task with structured evidence.",
+        ])
     env = dict(os.environ)
 
     # Inject HERMES_HOME so the worker reads the profile-scoped config.yaml
@@ -6095,6 +6198,11 @@ def _default_spawn(
     # what the tool reads — set it explicitly here so comments are
     # attributed correctly regardless of how the child loads config.
     env["HERMES_PROFILE"] = profile_arg
+    if runner_command:
+        env["HERMES_PM_CLAUDE_RUNNER_AUTORUN"] = "1"
+        env["HERMES_PM_CLAUDE_RUNNER_COMMAND"] = runner_command
+        env["HERMES_PM_CLAUDE_RUNNER_WORKDIR"] = workspace
+        _prepend_pythonpath(env, str(Path(__file__).resolve().parents[1]))
 
     cmd = [
         *_resolve_hermes_argv(),
@@ -6138,6 +6246,9 @@ def _default_spawn(
         "chat",
         "-q", prompt,
     ])
+    if runner_command:
+        cmd = [sys.executable, "-m", "hermes_cli.pm_worker_bootstrap", "--", *cmd]
+
     # Redirect output to a per-task log under <board-root>/logs/.
     # Anchored at the board root (not the shared kanban root), so
     # `hermes kanban log` on a specific board reads its own file and

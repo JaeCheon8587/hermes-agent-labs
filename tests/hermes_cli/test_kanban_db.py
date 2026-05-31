@@ -2129,6 +2129,64 @@ class TestSharedBoardPaths:
         assert env["HERMES_KANBAN_BRANCH"] == "wt/t_dispatch_env"
 
 
+def test_default_spawn_wraps_pm_claude_runner_tasks_in_bootstrap(tmp_path, monkeypatch):
+    """PM architect/implementer cards with runner commands should autorun before Hermes chat."""
+    captured = {}
+
+    class _FakePopen:
+        def __init__(self, cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["env"] = kwargs.get("env") or {}
+            captured["cwd"] = kwargs.get("cwd")
+            self.pid = 4242
+
+    monkeypatch.setattr(kb, "_resolve_hermes_argv", lambda: ["hermes"])
+    monkeypatch.setattr("subprocess.Popen", _FakePopen)
+    monkeypatch.setattr(
+        "hermes_cli.profiles.resolve_profile_env",
+        lambda profile: str(tmp_path / ".hermes" / "profiles" / profile),
+    )
+    workspace = tmp_path / "project"
+    workspace.mkdir()
+    body = """
+[Python Claude runner 실행 명령]
+- 아래 명령을 작업 시작 시 먼저 실행할 것:
+```bash
+python3 -m tools.pm_claude_delegation run --mode architect --plan-id plan_a --task-id t_runner --workdir /repo --command 'claude --print' --prompt-file .soul/prompts/p.md --output-format design --artifact-path .soul/artifacts/design/p.md --manifest-path .soul/artifacts/claude/m.json --readonly
+```
+""".strip()
+    task = kb.Task(
+        id="t_runner",
+        title="architect",
+        body=body,
+        assignee="backend-specialist",
+        status="ready",
+        priority=0,
+        created_by=None,
+        created_at=0,
+        started_at=None,
+        completed_at=None,
+        workspace_kind="dir",
+        workspace_path=str(workspace),
+        claim_lock=None,
+        claim_expires=None,
+        tenant=None,
+    )
+
+    pid = kb._default_spawn(task, str(workspace))
+
+    assert pid == 4242
+    assert captured["cmd"][:4] == [sys.executable, "-m", "hermes_cli.pm_worker_bootstrap", "--"]
+    assert captured["cmd"][4:7] == ["hermes", "-p", "backend-specialist"]
+    assert captured["env"]["HERMES_PM_CLAUDE_RUNNER_AUTORUN"] == "1"
+    assert captured["env"]["HERMES_PM_CLAUDE_RUNNER_COMMAND"].startswith("python3 -m tools.pm_claude_delegation run")
+    assert captured["env"]["HERMES_PM_CLAUDE_RUNNER_WORKDIR"] == str(workspace)
+    assert str(Path(kb.__file__).resolve().parents[1]) in captured["env"].get("PYTHONPATH", "")
+    query_index = captured["cmd"].index("-q") + 1
+    assert "Dispatcher startup will automatically run" in captured["cmd"][query_index]
+    assert "work kanban task t_runner" in captured["cmd"][query_index]
+
+
 # ---------------------------------------------------------------------------
 # latest_summary / latest_summaries — surface task_runs.summary handoffs
 # ---------------------------------------------------------------------------

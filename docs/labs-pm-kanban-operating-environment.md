@@ -2,6 +2,8 @@
 
 This document describes the local operating environment for the `JaeCheon8587/hermes-agent-labs` branch. The goal is not to preserve the sample `HermesTest` project; that project is a disposable smoke-test workspace. The goal is to make the Hermes PM/Kanban runtime reproducible on another WSL machine.
 
+For a visual Korean walkthrough of the Slack PM flow, Mermaid UML diagrams, agent inputs/outputs, gates, and runtime artifact paths, open `docs/labs-pm-kanban-workflow-overview.html` in a browser.
+
 ## Scope
 
 Managed as code in this repository:

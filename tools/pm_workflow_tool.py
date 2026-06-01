@@ -31,8 +31,7 @@ _DEDICATED_WORKER_MODES_BY_ASSIGNEE = {
     "backend-implementer": {"implementer", "debugger"},
     "backend-reviewer": {"reviewer"},
 }
-_LEGACY_MULTI_MODE_WORKER = "backend-specialist"
-_WORKER_ASSIGNEES = set(_DEDICATED_WORKER_MODES_BY_ASSIGNEE) | {_LEGACY_MULTI_MODE_WORKER}
+_WORKER_ASSIGNEES = set(_DEDICATED_WORKER_MODES_BY_ASSIGNEE)
 _ALLOWED_ASSIGNEES = _WORKER_ASSIGNEES | {"project_manager"}
 _ACTIVE_STATUSES = ("running", "ready", "todo", "blocked")
 _INTERNAL_TOOLSET = "pm_workflow_internal"
@@ -341,15 +340,12 @@ def _run_worker_preflight(assignees: list[str]) -> dict[str, Any]:
     for assignee in required:
         auth = _auth_snapshot(assignee)
         chat = _quick_chat_probe(assignee)
-        if assignee == _LEGACY_MULTI_MODE_WORKER:
-            gateway = _gateway_health_check(assignee)
-        else:
-            gateway = {
-                "assignee": assignee,
-                "ok": True,
-                "attempted": False,
-                "reason": "dedicated Kanban worker profile: gateway not required for profile chat dispatch",
-            }
+        gateway = {
+            "assignee": assignee,
+            "ok": True,
+            "attempted": False,
+            "reason": "dedicated Kanban worker profile: gateway not required for profile chat dispatch",
+        }
         worker_ok = bool(chat.get("ok"))
         if not worker_ok:
             all_ok = False
@@ -380,16 +376,13 @@ def _attempt_preflight_repair(preflight: dict[str, Any]) -> dict[str, Any]:
 
     repair_actions: list[dict[str, Any]] = []
     for assignee in failed:
-        if assignee == _LEGACY_MULTI_MODE_WORKER:
-            repair_actions.append({"gateway_restart": _restart_gateway_only(assignee)})
-        else:
-            repair_actions.append({
-                "gateway_restart": {
-                    "assignee": assignee,
-                    "attempted": False,
-                    "reason": "dedicated Kanban worker profile: gateway repair not required",
-                }
-            })
+        repair_actions.append({
+            "gateway_restart": {
+                "assignee": assignee,
+                "attempted": False,
+                "reason": "dedicated Kanban worker profile: gateway repair not required",
+            }
+        })
         worker = preflight.get("results", {}).get(assignee, {})
         auth = worker.get("auth_snapshot", {})
         chat = worker.get("chat_probe", {})
@@ -1718,6 +1711,50 @@ def _build_implementer_delegation_prompt(
     return "\n".join(sections).rstrip() + "\n"
 
 
+def _build_architect_task_envelope(
+    *,
+    project_path: str,
+    request: str,
+    task: dict[str, Any],
+    paths: dict[str, str],
+) -> str:
+    title = _task_text(task, "title", "설계 작업")
+    body = _task_text(task, "body", "(no extra body)")
+    return "\n".join([
+        "# Architect Task Envelope",
+        "",
+        "이 파일은 Claude Code 실행 프롬프트가 아니다. backend-architect runner가 이 envelope을 해석해 실제 Claude Code 설계 프롬프트를 작성한다.",
+        "PM workflow는 요청/범위/제약/산출물 위치만 전달하며, 세부 메타프롬프팅과 설계 판단은 backend-architect 책임이다.",
+        "",
+        "## Stage boundary",
+        "- architect/design-only 단계다.",
+        "- 사용자 설계 승인 전 구현을 시작하지 않는다.",
+        "- production 코드와 테스트 코드는 수정하지 않는다.",
+        "",
+        "## Project constraints",
+        f"- project_root: {project_path}",
+        "- production_code_root: src (사용자 요청 또는 task body가 다르게 지정하면 그 지시를 우선한다)",
+        f"- design_artifact_path: {paths['artifact']}",
+        "",
+        "## Original user request",
+        request.strip() or "(empty)",
+        "",
+        "## Architect task",
+        f"- title: {title}",
+        f"- key: {_task_text(task, 'key')}",
+        "",
+        body,
+        "",
+        "## Expected output classes",
+        "- 설계 요약",
+        "- 현재 코드/구조 관찰 결과",
+        "- 구현 작업분해",
+        "- 검증 계획",
+        "- 사용자 확인/승인 필요사항",
+        "",
+    ])
+
+
 def _build_claude_delegation_prompt(
     *,
     project_path: str,
@@ -1727,7 +1764,7 @@ def _build_claude_delegation_prompt(
     paths: dict[str, str],
 ) -> str:
     if mode == "architect":
-        return _build_architect_delegation_prompt(project_path=project_path, request=request, task=task, paths=paths)
+        return _build_architect_task_envelope(project_path=project_path, request=request, task=task, paths=paths)
     if mode == "implementer":
         return _build_implementer_delegation_prompt(project_path=project_path, request=request, task=task, paths=paths)
     return "\n".join([
@@ -2974,6 +3011,43 @@ def _find_plan_for_task(profile: str, task_id: str) -> tuple[dict[str, Any], str
     return None, None, None, None
 
 
+def handle_blocked_pm_workflow_task(
+    conn: Any,
+    task_id: str,
+    *,
+    profile: str = "project_manager",
+    reason: str | None = None,
+    event_kind: str = "blocked",
+) -> dict[str, Any]:
+    """Best-effort bridge from Kanban blocked/gave-up to PM plan state."""
+    data, plan_id, plan, phase = _find_plan_for_task(profile, task_id)
+    if not data or not plan_id or not isinstance(plan, dict):
+        return {"ok": False, "reason": "task not tracked by PM workflow", "task_id": task_id}
+    plan = _ensure_plan_workflow_fields(plan)
+    _update_cached_created_task_status(plan, task_id, "blocked")
+    now = int(time.time())
+    block_record = {
+        "task_id": task_id,
+        "phase": phase,
+        "reason": str(reason or "").strip() or None,
+        "event_kind": event_kind,
+        "blocked_at": now,
+    }
+    plan["last_blocked_task"] = block_record
+    if phase == "architect":
+        plan["design_status"] = "blocked"
+        if plan.get("status") in {"design_in_progress", "design_revision_requested", "awaiting_design_approval"}:
+            plan["status"] = "design_blocked"
+    elif phase == "reviewer":
+        plan["review_status"] = "blocked"
+    elif phase == "final":
+        plan["final_status"] = "blocked"
+    plan["updated_at"] = now
+    data.setdefault("plans", {})[plan_id] = plan
+    _save_plans(data, profile)
+    return {"ok": True, "plan_id": plan_id, "task_id": task_id, "phase": phase, "actions": ["marked_task_blocked"]}
+
+
 def handle_completed_pm_workflow_task(conn: Any, task_id: str, *, profile: str = "project_manager") -> dict[str, Any]:
     data, plan_id, plan, phase = _find_plan_for_task(profile, task_id)
     if not data or not plan_id or not isinstance(plan, dict):
@@ -4118,8 +4192,8 @@ _TASK_ITEM_SCHEMA = {
         "key": {"type": "string", "description": "Stable local key such as T1, T2, summary."},
         "title": {"type": "string"},
         "body": {"type": "string"},
-        "assignee": {"type": "string", "enum": ["backend-architect", "backend-implementer", "backend-reviewer", "backend-specialist", "project_manager"]},
-        "mode": {"type": "string", "enum": ["architect", "implementer", "debugger", "reviewer"], "description": "Required for backend worker tasks; omit for project_manager tasks. Dedicated worker mapping: backend-architect=architect, backend-implementer=implementer/debugger, backend-reviewer=reviewer. Legacy backend-specialist is multi-mode and may use architect/implementer/debugger/reviewer when explicitly requested."},
+        "assignee": {"type": "string", "enum": ["backend-architect", "backend-implementer", "backend-reviewer", "project_manager"]},
+        "mode": {"type": "string", "enum": ["architect", "implementer", "debugger", "reviewer"], "description": "Required for backend worker tasks; omit for project_manager tasks. Dedicated worker mapping: backend-architect=architect, backend-implementer=implementer/debugger, backend-reviewer=reviewer."},
         "parents": {"type": "array", "items": {"type": "string"}},
         "priority": {"type": "integer"},
     },

@@ -2420,41 +2420,21 @@ def _synthesize_ended_run(
 # ---------------------------------------------------------------------------
 
 def _has_sticky_block(conn: sqlite3.Connection, task_id: str) -> bool:
-    """Return True when ``task_id`` is sticky-blocked by an explicit
-    worker/operator ``kanban_block`` call (#28712).
+    """Return True when ``task_id`` must stay blocked until explicit unblock.
 
-    A ``blocked`` status can come from two very different sources:
-
-    * **Worker- or operator-initiated** — a worker called
-      ``kanban_block(reason="review-required: ...")`` (or somebody ran
-      ``hermes kanban block <id>``).  This is a deliberate handoff that
-      should stay blocked until an operator unblocks it.  The block tool
-      emits a ``"blocked"`` event row in ``task_events``.
-
-    * **Circuit-breaker** — ``_record_task_failure`` tripped after
-      repeated crashes / spawn failures / timeouts.  This emits
-      ``"gave_up"``, *not* ``"blocked"``, and is meant to recover
-      automatically once the underlying conditions change (e.g. parents
-      finish, transient infra error clears).
-
-    The cheapest signal that distinguishes the two is the most recent
-    ``"blocked"`` / ``"unblocked"`` event for the task.  If the most
-    recent one is ``"blocked"`` (or there is a ``"blocked"`` event and
-    no ``"unblocked"`` event has fired since), the task is sticky and
-    ``recompute_ready`` must *not* auto-promote it.
-
-    Returns ``False`` when there is no such event at all (e.g. the task
-    was set to ``status='blocked'`` by the circuit breaker or by direct
-    DB manipulation) — preserves the pre-#28712 auto-recover semantics
-    for that path.
+    Explicit worker/operator blocks emit ``blocked``. The dispatcher circuit
+    breaker emits ``gave_up``. Both are terminal operator-actionable states;
+    neither should be immediately auto-promoted by ``recompute_ready`` just
+    because the task has no parents. ``unblocked`` is the explicit recovery
+    edge that clears either state.
     """
     row = conn.execute(
         "SELECT kind FROM task_events "
-        "WHERE task_id = ? AND kind IN ('blocked', 'unblocked') "
+        "WHERE task_id = ? AND kind IN ('blocked', 'gave_up', 'unblocked') "
         "ORDER BY id DESC LIMIT 1",
         (task_id,),
     ).fetchone()
-    return bool(row) and row["kind"] == "blocked"
+    return bool(row) and row["kind"] in {"blocked", "gave_up"}
 
 
 def recompute_ready(conn: sqlite3.Connection) -> int:
@@ -3358,6 +3338,31 @@ def _notify_pm_workflow_completion(conn: sqlite3.Connection, task_id: str) -> No
                 )
 
 
+def _notify_pm_workflow_blocked(
+    conn: sqlite3.Connection,
+    task_id: str,
+    *,
+    reason: Optional[str] = None,
+    event_kind: str = "blocked",
+) -> None:
+    """Best-effort bridge from Kanban blocked/gave-up to PM workflow state."""
+    try:
+        from tools.pm_workflow_tool import handle_blocked_pm_workflow_task
+    except Exception:
+        return
+    try:
+        handle_blocked_pm_workflow_task(conn, task_id, reason=reason, event_kind=event_kind)
+    except Exception as exc:
+        with contextlib.suppress(Exception):
+            with write_txn(conn):
+                _append_event(
+                    conn,
+                    task_id,
+                    "pm_workflow_blocked_hook_failed",
+                    {"error": str(exc)[:500], "event_kind": event_kind},
+                )
+
+
 # ---------------------------------------------------------------------------
 # Workspace / tmux cleanup
 # ---------------------------------------------------------------------------
@@ -3713,7 +3718,8 @@ def block_task(
                 summary=reason,
             )
         _append_event(conn, task_id, "blocked", {"reason": reason}, run_id=run_id)
-        return True
+    _notify_pm_workflow_blocked(conn, task_id, reason=reason, event_kind="blocked")
+    return True
 
 
 
@@ -5242,6 +5248,8 @@ def _record_task_failure(
                     run_id=run_id,
                 )
             # Timeout/crash path's caller already emitted its own event.
+    if blocked:
+        _notify_pm_workflow_blocked(conn, task_id, reason=error[:500], event_kind="gave_up")
     return blocked
 
 

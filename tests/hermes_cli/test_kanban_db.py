@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import json
 import os
 import sqlite3
 import sys
@@ -813,6 +814,72 @@ def test_unblock_resets_failure_counters(kanban_home):
         assert task.status == "ready"
         assert task.consecutive_failures == 0
         assert task.last_failure_error is None
+
+
+def test_gave_up_block_is_not_auto_promoted_by_recompute_ready(kanban_home):
+    with kb.connect() as conn:
+        t = kb.create_task(conn, title="runner timeout", assignee="backend-architect")
+        kb.claim_task(conn, t)
+        blocked = kb._record_task_failure(
+            conn,
+            t,
+            "PM Claude runner timed out",
+            outcome="pm_claude_runner_failed",
+            failure_limit=1,
+            release_claim=True,
+            end_run=True,
+        )
+        assert blocked is True
+        assert kb.get_task(conn, t).status == "blocked"
+
+        assert kb.recompute_ready(conn) == 0
+        assert kb.get_task(conn, t).status == "blocked"
+
+        assert kb.unblock_task(conn, t)
+        assert kb.get_task(conn, t).status == "ready"
+
+
+def test_gave_up_syncs_pm_design_plan_blocked_state(kanban_home):
+    profile_state = kanban_home / "profiles" / "project_manager" / "state"
+    profile_state.mkdir(parents=True)
+
+    with kb.connect() as conn:
+        t = kb.create_task(conn, title="architect", assignee="backend-architect")
+        kb.claim_task(conn, t)
+        plans_path = profile_state / "pm_plans.json"
+        plans_path.write_text(
+            json.dumps({
+                "plans": {
+                    "plan_test": {
+                        "status": "design_in_progress",
+                        "design_status": "in_progress",
+                        "tasks": [{"key": "design", "mode": "architect", "assignee": "backend-architect"}],
+                        "created_design_tasks": [{"key": "design", "task_id": t, "status": "in_progress"}],
+                        "created_tasks": [{"key": "design", "task_id": t, "status": "in_progress"}],
+                    }
+                }
+            }),
+            encoding="utf-8",
+        )
+
+        assert kb._record_task_failure(
+            conn,
+            t,
+            "artifact_contract_failed",
+            outcome="pm_claude_runner_failed",
+            failure_limit=1,
+            release_claim=True,
+            end_run=True,
+        ) is True
+
+    saved = json.loads(plans_path.read_text(encoding="utf-8"))
+    plan = saved["plans"]["plan_test"]
+    assert plan["design_status"] == "blocked"
+    assert plan["status"] == "design_blocked"
+    assert plan["last_blocked_task"]["task_id"] == t
+    assert plan["last_blocked_task"]["event_kind"] == "gave_up"
+    assert plan["created_design_tasks"][0]["status"] == "blocked"
+    assert plan["created_tasks"][0]["status"] == "blocked"
 
 
 # ---------------------------------------------------------------------------

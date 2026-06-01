@@ -67,8 +67,23 @@ def _connect(board: str) -> sqlite3.Connection:
 def _load_state() -> dict[str, Any]:
     data = _read_json(STATE_PATH)
     data.setdefault('initialized_at', _now())
-    data.setdefault('last_event_id', 0)
+    boards = data.get('boards')
+    if not isinstance(boards, dict):
+        data['boards'] = {}
     return data
+
+
+def _board_state(state: dict[str, Any], board: str) -> dict[str, Any]:
+    boards = state.setdefault('boards', {})
+    if not isinstance(boards, dict):
+        boards = {}
+        state['boards'] = boards
+    board_data = boards.setdefault(board, {})
+    if not isinstance(board_data, dict):
+        board_data = {}
+        boards[board] = board_data
+    board_data.setdefault('last_event_id', 0)
+    return board_data
 
 
 def _fmt_ts(ts: int | None) -> str:
@@ -184,12 +199,13 @@ def main() -> int:
     board = _read_board()
     conn = _connect(board)
     state = _load_state()
-    last_event_id = int(state.get('last_event_id') or 0)
+    board_state = _board_state(state, board)
+    last_event_id = int(board_state.get('last_event_id') or 0)
     try:
         events = _candidate_events(conn, last_event_id)
     except sqlite3.DatabaseError as exc:
-        state['last_db_error'] = str(exc)
-        state['last_db_error_at'] = _now()
+        board_state['last_db_error'] = str(exc)
+        board_state['last_db_error_at'] = _now()
         _atomic_write_json(STATE_PATH, state)
         return 0
     if not events:
@@ -205,13 +221,13 @@ def main() -> int:
             continue
         reason = _reason_for_event(conn, event)
         print(_format_message(board, event, plan_id, phase, reason))
-        state['last_event_id'] = max_event_id
-        state['last_reported_at'] = _now()
+        board_state['last_event_id'] = max_event_id
+        board_state['last_reported_at'] = _now()
         _atomic_write_json(STATE_PATH, state)
         return 0
 
-    state['last_event_id'] = max_event_id
-    state['last_reported_at'] = _now()
+    board_state['last_event_id'] = max_event_id
+    board_state['last_reported_at'] = _now()
     _atomic_write_json(STATE_PATH, state)
     return 0
 

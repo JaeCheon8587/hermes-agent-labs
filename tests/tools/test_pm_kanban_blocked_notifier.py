@@ -97,7 +97,7 @@ def test_main_emits_blocked_message_for_pm_plan_task(notifier_module, capsys):
     assert '- Phase: reviewer' in out
     assert '- Reason: scope mismatch' in out
     state = json.loads(state_path.read_text(encoding='utf-8'))
-    assert state['last_event_id'] == 1
+    assert state['boards']['testboard']['last_event_id'] == 1
 
 
 def test_main_dedupes_already_reported_blocked_event(notifier_module, capsys):
@@ -114,7 +114,7 @@ def test_main_dedupes_already_reported_blocked_event(notifier_module, capsys):
         }
     })
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(json.dumps({'initialized_at': 1, 'last_event_id': 1}, ensure_ascii=False, indent=2), encoding='utf-8')
+    state_path.write_text(json.dumps({'initialized_at': 1, 'boards': {'testboard': {'last_event_id': 1}}}, ensure_ascii=False, indent=2), encoding='utf-8')
 
     rc = module.main()
     out = capsys.readouterr().out
@@ -150,4 +150,32 @@ def test_main_reports_design_gate_pm_phase_instead_of_final(notifier_module, cap
     assert '- Phase: design_approval_gate' in out
     assert '- Phase: final' not in out
     state = json.loads(state_path.read_text(encoding='utf-8'))
-    assert state['last_event_id'] == 1
+    assert state['boards']['testboard']['last_event_id'] == 1
+
+
+def test_legacy_global_last_event_id_does_not_suppress_current_board(notifier_module, capsys):
+    module, plans_path, state_path, db_path = notifier_module
+    _insert_task(db_path, task_id='t_board_local', title='Board-local blocked event', assignee='backend-architect')
+    _insert_block_event(db_path, task_id='t_board_local', reason='board local event id is lower than legacy global id')
+    _write_plans(plans_path, {
+        'plan_board_local': {
+            'plan_id': 'plan_board_local',
+            'status': 'executed',
+            'project_path': '/tmp/workspace',
+            'tasks': [{'key': 'T1', 'mode': 'architect', 'title': 'Board-local blocked event'}],
+            'created_design_tasks': [{'key': 'T1', 'task_id': 't_board_local', 'title': 'Board-local blocked event', 'assignee': 'backend-architect'}],
+            'created_tasks': [{'key': 'T1', 'task_id': 't_board_local', 'title': 'Board-local blocked event', 'assignee': 'backend-architect'}],
+        }
+    })
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({'initialized_at': 1, 'last_event_id': 1900}, ensure_ascii=False, indent=2), encoding='utf-8')
+
+    rc = module.main()
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert 'PM 보고: 작업이 블로킹되었습니다.' in out
+    assert '- Plan ID: plan_board_local' in out
+    state = json.loads(state_path.read_text(encoding='utf-8'))
+    assert state['last_event_id'] == 1900
+    assert state['boards']['testboard']['last_event_id'] == 1

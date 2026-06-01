@@ -294,9 +294,9 @@ def test_claude_delegation_contract_applies_only_to_architect_and_implementer(tm
         "plan_claude_contract",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
         ],
     )
@@ -317,9 +317,9 @@ def test_architect_and_implementer_task_bodies_require_claude_delegation(hermes_
         request="설계와 구현은 Claude Code 위임을 강제하고 리뷰는 독립 검증한다",
         project_path=str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
         ],
     ))
@@ -343,12 +343,12 @@ def test_architect_and_implementer_task_bodies_require_claude_delegation(hermes_
 def test_completion_gate_rejects_worker_claim_without_runner_manifest(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_manifest_required",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
             ],
             status="design_in_progress",
             design_status="in_progress",
@@ -367,12 +367,12 @@ def test_completion_gate_rejects_worker_claim_without_runner_manifest(hermes_hom
 def test_completion_gate_accepts_python_runner_manifest(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_manifest_accept",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
             ],
             status="design_in_progress",
             design_status="in_progress",
@@ -389,12 +389,12 @@ def test_completion_gate_accepts_python_runner_manifest(hermes_home, tmp_path):
 def test_architect_completion_without_claude_delegation_manifest_is_blocked(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_claude_gate_arch",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
             ],
             status="design_in_progress",
             design_status="in_progress",
@@ -417,18 +417,18 @@ def test_architect_completion_without_claude_delegation_manifest_is_blocked(herm
 def test_implementer_completion_accepts_claude_delegation_manifest_and_reviewer_does_not_require_it(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_claude_gate_impl",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -475,18 +475,18 @@ def test_implementer_completion_accepts_claude_delegation_manifest_and_reviewer_
 def test_implementer_completion_rejects_incomplete_handoff_artifact_headings(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_impl_heading_gate",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -525,18 +525,18 @@ def test_implementer_completion_rejects_incomplete_handoff_artifact_headings(her
 def test_reviewer_completion_blocks_pass_when_design_validation_coverage_is_missing(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_design_coverage_gate",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -609,7 +609,7 @@ def test_pm_execute_plan_injects_exact_runner_invocation_and_prompt_file(hermes_
         project_path=str(workspace),
         plan_kind="design",
         tasks=[
-            {"key": "T1", "title": "설계", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "설계", "assignee": "backend-architect", "mode": "architect", "parents": []},
         ],
     ))
     assert created["ok"] is True
@@ -627,15 +627,18 @@ def test_pm_execute_plan_injects_exact_runner_invocation_and_prompt_file(hermes_
     assert context.is_file()
 
     prompt_text = prompt.read_text(encoding="utf-8")
-    assert "# Claude Code Architect Delegation Prompt" in prompt_text
-    for heading in pm._COMMON_CLAUDE_PROMPT_SECTIONS:
-        assert heading in prompt_text
-    assert "read-only architect 단계" in prompt_text
+    assert prompt_text.startswith("# Architect Task Envelope")
+    assert "Claude Code 실행 프롬프트가 아니다" in prompt_text
     assert "설계는 Python runner가 Claude Code에 위임한다" in prompt_text
-    assert "최종 응답 자체가 완전한 markdown 설계 문서" in prompt_text
-    assert "상태 보고만 출력하지 말고" in prompt_text
-    assert "heading 체크리스트/요약표로 대체하지 않는다" in prompt_text
-    assert "## 설계 요약" in prompt_text
+    assert "# Claude Code Architect Delegation Prompt" not in prompt_text
+    assert "[인터페이스 계약]" not in prompt_text
+    assert "[엣지 케이스]" not in prompt_text
+    assert "[아키텍처 컨텍스트]" not in prompt_text
+    assert "[대안 비교]" not in prompt_text
+    assert "최종 응답 자체가 완전한 markdown 설계 문서" not in prompt_text
+    assert "상태 보고만 출력하지 말고" not in prompt_text
+    assert "heading 체크리스트/요약표로 대체하지 않는다" not in prompt_text
+    assert "`## 설계 요약`" not in prompt_text
     assert str(manifest.relative_to(workspace)) not in prompt_text
     assert f"plan_id: {plan_id}" not in prompt_text
 
@@ -698,7 +701,7 @@ def test_write_claude_runner_prompt_builds_implementer_prompt_and_internal_conte
     assert "--prompt-file .soul/prompts/plan_impl_t_impl_implementer.md" in context_text
 
 
-def test_architect_prompt_adds_conditional_api_sections_without_forcing_them_on_simple_work(tmp_path):
+def test_architect_prompt_file_is_envelope_not_conditional_claude_prompt(tmp_path):
     workspace = _workspace(tmp_path)
     api_result = pm._write_claude_runner_prompt(
         project_path=str(workspace),
@@ -711,13 +714,15 @@ def test_architect_prompt_adds_conditional_api_sections_without_forcing_them_on_
     )
     api_prompt = Path(api_result["prompt_path"]).read_text(encoding="utf-8")
 
-    assert "[인터페이스 계약]" in api_prompt
-    assert "[엣지 케이스]" in api_prompt
-    assert "[아키텍처 컨텍스트]" in api_prompt
-    assert "[대안 비교]" in api_prompt
-    assert "[사용자 확인 필요사항]" in api_prompt
-    assert "`## API / DTO 계약`" in api_prompt
-    assert "`## 검토한 대안`" in api_prompt
+    assert api_prompt.startswith("# Architect Task Envelope")
+    assert "GET /books API 설계" in api_prompt
+    assert "[인터페이스 계약]" not in api_prompt
+    assert "[엣지 케이스]" not in api_prompt
+    assert "[아키텍처 컨텍스트]" not in api_prompt
+    assert "[대안 비교]" not in api_prompt
+    assert "[사용자 확인 필요사항]" not in api_prompt
+    assert "`## API / DTO 계약`" not in api_prompt
+    assert "`## 검토한 대안`" not in api_prompt
 
     simple_result = pm._write_claude_runner_prompt(
         project_path=str(workspace),
@@ -730,11 +735,12 @@ def test_architect_prompt_adds_conditional_api_sections_without_forcing_them_on_
     )
     simple_prompt = Path(simple_result["prompt_path"]).read_text(encoding="utf-8")
 
+    assert simple_prompt.startswith("# Architect Task Envelope")
     assert "[인터페이스 계약]" not in simple_prompt
     assert "[엣지 케이스]" not in simple_prompt
     assert "[아키텍처 컨텍스트]" not in simple_prompt
     assert "`## API / DTO 계약`" not in simple_prompt
-    assert "[대안 비교]" in simple_prompt
+    assert "[대안 비교]" not in simple_prompt
 
 
 def test_implementer_prompt_adds_api_contract_and_detailed_handoff_requirements(tmp_path):
@@ -826,12 +832,12 @@ def test_dedicated_worker_preflight_uses_chat_without_gateway_restart(monkeypatc
 def test_architect_completion_marks_plan_awaiting_design_approval(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_arch",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
             ],
             status="design_in_progress",
             design_status="in_progress",
@@ -854,12 +860,12 @@ def test_architect_completion_marks_plan_awaiting_design_approval(hermes_home, t
 def test_design_revision_reopens_completed_architect_task(hermes_home, tmp_path, monkeypatch):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_revision_reopen",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
             ],
             status="design_in_progress",
             design_status="in_progress",
@@ -897,12 +903,12 @@ def test_design_revision_reopens_completed_architect_task(hermes_home, tmp_path,
 def test_design_revision_state_rejects_reexecution_of_design_phase(hermes_home, tmp_path, monkeypatch):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_revision_no_reexecute",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
             ],
             status="design_revision_requested",
             design_status="revision_requested",
@@ -937,16 +943,16 @@ def test_design_approval_auto_completes_pm_gate_and_promotes_implementer(hermes_
     workspace = _workspace(tmp_path)
     monkeypatch.setattr(pm, "_run_worker_preflight", lambda assignees: {"ok": True, "checked": list(assignees)})
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
     plan = _base_plan(
         "plan_design_gate_auto_complete",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
             {"key": "T2", "title": "설계 승인 게이트 확인 및 구현 진행 관리", "assignee": "project_manager", "parents": ["T1"]},
-            {"key": "T3", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T2"]},
-            {"key": "T4", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T3"]},
+            {"key": "T3", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T2"]},
+            {"key": "T4", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T3"]},
             {"key": "T5", "title": "final", "assignee": "project_manager", "parents": ["T4"]},
         ],
         contract={"expected_deliverables": ["algorithms/top_k_frequent.py"]},
@@ -977,13 +983,13 @@ def test_design_approval_auto_completes_pm_gate_and_promotes_implementer(hermes_
 def test_mapping_plan_design_approval_marks_plan_approved_without_execution(hermes_home, tmp_path, monkeypatch):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="mapping architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="mapping architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="mapping artifact ready")
     source_plan = _base_plan(
         "plan_design_source_for_mapping",
         str(workspace),
         tasks=[
-            {"key": "S1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "S1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
         ],
         plan_kind="design",
         status="approved",
@@ -996,7 +1002,7 @@ def test_mapping_plan_design_approval_marks_plan_approved_without_execution(herm
         "plan_mapping_approval_only",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "mapping architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "mapping architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
         ],
         plan_kind="mapping",
         contract={"source_plan_id": "plan_design_source_for_mapping"},
@@ -1027,13 +1033,13 @@ def test_design_approval_rejects_staged_plan_without_real_followup_tasks(hermes_
     monkeypatch.setattr(pm, "_run_worker_preflight", lambda assignees: {"ok": True, "checked": list(assignees)})
     monkeypatch.setattr(pm, "pm_create_kanban_workflow", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("execution should not start for invalid follow-up graph")))
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
     plan = _base_plan(
         "plan_missing_execution_followups",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
             {"key": "T2", "title": "설계 요약 및 승인 준비", "assignee": "project_manager", "parents": ["T1"]},
         ],
         status="awaiting_design_approval",
@@ -1068,9 +1074,9 @@ def test_staged_plan_rejects_reviewer_not_downstream_of_implementer(hermes_home,
             "implementation_paths": ["src/Books/BooksController.cs"],
         },
         tasks=[
-            {"key": "T1", "title": "설계", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "구현", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "리뷰", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "설계", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "구현", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "리뷰", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T4", "title": "최종 보고", "assignee": "project_manager", "parents": ["T3"]},
         ],
     ))
@@ -1082,18 +1088,18 @@ def test_staged_plan_rejects_reviewer_not_downstream_of_implementer(hermes_home,
 def test_implementer_completion_exports_reviewer_scope(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_impl",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -1126,9 +1132,9 @@ def test_implementer_completion_exports_reviewer_scope(hermes_home, tmp_path):
 def test_reviewer_completion_exports_final_scope(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, implementer, summary="implemented")
         reviewer = kb.create_task(conn, title="문서 변경 검토 및 제약 준수 확인", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="최종 결과 정리 및 사용자 보고", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
@@ -1136,9 +1142,9 @@ def test_reviewer_completion_exports_final_scope(hermes_home, tmp_path):
             "plan_review",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -1193,19 +1199,19 @@ def test_reviewer_completion_exports_final_scope(hermes_home, tmp_path):
 def test_reviewer_export_backfills_final_evidence_when_metadata_omits_it(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, implementer, summary="implemented")
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_review_fallback",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -1251,19 +1257,19 @@ def test_reviewer_export_backfills_final_evidence_when_metadata_omits_it(hermes_
 def test_reviewer_concern_exports_final_scope_and_creates_followup_task(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, implementer, summary="implemented")
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_review_concern",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -1323,19 +1329,19 @@ def test_reviewer_concern_exports_final_scope_and_creates_followup_task(hermes_h
 def test_reviewer_blocked_verdict_does_not_export_final_scope(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, implementer, summary="implemented")
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_review_blocked",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -1447,19 +1453,19 @@ def test_reviewer_followup_widens_scope_and_exports_implementer_gate_for_code_re
         },
     }
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, implementer, summary="implemented")
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_review_scope",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -1535,7 +1541,7 @@ def test_final_completion_updates_plan_with_structured_report(hermes_home, tmp_p
     _write_pm_plan(hermes_home, plan)
 
     with kb.connect() as conn:
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         pm._export_approved_scope(plan, "reviewer", reviewer, approved_by="user", approved_at=123)
         kb.complete_task(
             conn,
@@ -1605,20 +1611,20 @@ def test_final_completion_hydrates_reviewer_result_from_parent_metadata(hermes_h
     verification.write_text("verification report", encoding="utf-8")
 
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
         _complete_with_claude(conn, workspace, "plan_impl", implementer, "implemented deliverable", "implementer")
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
 
         plan = _base_plan(
             "plan_final_fallback",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             status="executed",
@@ -1699,18 +1705,18 @@ def test_final_completion_hydrates_reviewer_result_from_parent_metadata(hermes_h
 def test_reviewer_scope_export_includes_review_contract(hermes_home, tmp_path):
     workspace = _workspace(tmp_path)
     with kb.connect() as conn:
-        architect = kb.create_task(conn, title="architect", assignee="backend-specialist", workspace_kind="dir", workspace_path=str(workspace))
+        architect = kb.create_task(conn, title="architect", assignee="backend-architect", workspace_kind="dir", workspace_path=str(workspace))
         kb.complete_task(conn, architect, summary="design done")
-        implementer = kb.create_task(conn, title="implementer", assignee="backend-specialist", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
-        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-specialist", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
+        implementer = kb.create_task(conn, title="implementer", assignee="backend-implementer", parents=[architect], workspace_kind="dir", workspace_path=str(workspace))
+        reviewer = kb.create_task(conn, title="reviewer", assignee="backend-reviewer", parents=[implementer], workspace_kind="dir", workspace_path=str(workspace))
         final = kb.create_task(conn, title="final", assignee="project_manager", parents=[reviewer], workspace_kind="dir", workspace_path=str(workspace))
         plan = _base_plan(
             "plan_review_scope",
             str(workspace),
             tasks=[
-                {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-                {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-                {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+                {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+                {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+                {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
                 {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
             ],
             contract={
@@ -1761,9 +1767,9 @@ def test_explicit_contract_deliverables_override_path_inference(tmp_path):
         "plan_contract",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
         ],
         contract={
@@ -1801,9 +1807,9 @@ def test_code_deliverable_contract_uses_code_review_mode(tmp_path):
         "plan_code_contract",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
         ],
         contract={"expected_deliverables": ["src/app/service.py"]},
@@ -1821,9 +1827,9 @@ def test_contract_implementation_paths_are_canonical_for_code_scope(tmp_path):
         "plan_impl_paths",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "implementation mapping", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "implementation mapping", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
         ],
         contract={
@@ -1882,9 +1888,9 @@ def test_build_workflow_contract_derives_implementation_paths_from_design_artifa
         "plan_design_scope",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
         ],
         contract={},
@@ -2001,9 +2007,9 @@ def test_export_approved_scope_uses_contract_implementation_paths(tmp_path):
         "plan_scope_impl_paths",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "implementation mapping", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "implementation mapping", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "assignee": "project_manager", "parents": ["T3"]},
         ],
         design_status="approved",
@@ -2044,10 +2050,10 @@ def test_final_phase_excludes_design_approval_pm_task(tmp_path):
         "plan_pm_phase_split",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
             {"key": "T2", "title": "design approval request", "assignee": "project_manager", "parents": ["T1"]},
-            {"key": "T3", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T2"]},
-            {"key": "T4", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T3"]},
+            {"key": "T3", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T2"]},
+            {"key": "T4", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T3"]},
             {"key": "T5", "title": "final synthesis", "assignee": "project_manager", "parents": ["T4"]},
         ],
         contract={"expected_deliverables": ["algorithms/bracket_validator.py"]},
@@ -2063,7 +2069,7 @@ def test_pm_supersede_plan_marks_plan_stale(hermes_home, tmp_path):
     plan = _base_plan(
         "plan_stale",
         str(workspace),
-        tasks=[{"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []}],
+        tasks=[{"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []}],
     )
     _write_pm_plan(hermes_home, plan)
     result = json.loads(pm.pm_supersede_plan("plan_stale", "obsolete test", superseded_by="plan_new"))
@@ -2088,7 +2094,7 @@ def test_pm_get_plan_status_normalizes_legacy_null_workflow_fields(hermes_home, 
         "final_status": None,
         "execution_phase": None,
         "tasks": [
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
         ],
     }
     _write_pm_plan(hermes_home, plan)
@@ -2111,9 +2117,9 @@ def test_pm_create_plan_rejects_noncanonical_contract_phase_keys(hermes_home, tm
         request="Create docs/specs/live-smoke-test-note-v9.md only.",
         summary="bad explicit contract",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "body": "write", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "body": "review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "body": "write", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "body": "review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "body": "report", "assignee": "project_manager", "parents": ["T3"]},
         ],
         contract={
@@ -2134,9 +2140,9 @@ def test_pm_create_plan_rejects_nonpath_expected_deliverables(hermes_home, tmp_p
         request="Create docs/specs/live-smoke-test-note-v9.md only.",
         summary="bad deliverables",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "body": "write", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "body": "review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "body": "write", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "body": "review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "body": "report", "assignee": "project_manager", "parents": ["T3"]},
         ],
         contract={
@@ -2155,9 +2161,9 @@ def test_pm_create_plan_allows_staged_plan_without_explicit_deliverable_paths_be
         request="Bracket validator algorithm implementation.",
         summary="missing concrete code path",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "body": "implement single source file", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "body": "review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "body": "implement single source file", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "body": "review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "body": "report", "assignee": "project_manager", "parents": ["T3"]},
         ],
         project_path=str(workspace),
@@ -2177,9 +2183,9 @@ def test_pm_create_plan_allows_mixed_mapping_and_execution_plan_before_architect
         request="승인된 설계안(.soul/artifacts/design/plan_f7927906_design.md)을 기준으로 주문 상세 조회 응답에 summary(totalItemCount, totalAmount, 조건부 finalAmount)를 구현하고 테스트/검증 결과까지 보고",
         summary="승인된 설계안을 구현 가능한 구체 파일 경로로 매핑한 뒤 주문 상세 summary 응답을 구현/검증하는 후속 실행 계획",
         tasks=[
-            {"key": "T1", "title": "구현 경로 매핑 설계", "body": "승인된 설계안을 기준으로 실제 구현 대상 파일과 테스트 파일을 확정한다.", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "주문 상세 응답 summary 구현", "body": "T1에서 식별한 실제 구현 경로에 따라 주문 상세 조회 응답에 summary를 추가한다.", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "테스트 및 회귀 검증", "body": "주문 상세 응답 계약 테스트와 하위 호환성 검증 결과를 .soul/artifacts/reports/order-detail-summary-validation.md에 정리한다.", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "구현 경로 매핑 설계", "body": "승인된 설계안을 기준으로 실제 구현 대상 파일과 테스트 파일을 확정한다.", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "주문 상세 응답 summary 구현", "body": "T1에서 식별한 실제 구현 경로에 따라 주문 상세 조회 응답에 summary를 추가한다.", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "테스트 및 회귀 검증", "body": "주문 상세 응답 계약 테스트와 하위 호환성 검증 결과를 .soul/artifacts/reports/order-detail-summary-validation.md에 정리한다.", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "최종 보고", "body": "최종 결과를 보고한다.", "assignee": "project_manager", "parents": ["T3"]},
         ],
         contract={
@@ -2208,8 +2214,8 @@ def test_pm_create_plan_rejects_design_plan_with_execution_tasks(hermes_home, tm
         summary="design-only plan should not contain implementer tasks",
         plan_kind="design",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "body": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "body": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
         ],
         project_path=str(workspace),
     ))
@@ -2224,7 +2230,7 @@ def test_pm_create_plan_rejects_staged_plan_without_execution_roles(hermes_home,
         request="설계 승인 후 구현까지 이어지는 staged workflow",
         summary="staged plan must already contain implementation/review/final roles",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-architect", "mode": "architect", "parents": []},
             {"key": "T2", "title": "설계 요약 및 승인 준비", "body": "approve design", "assignee": "project_manager", "parents": ["T1"]},
         ],
         project_path=str(workspace),
@@ -2241,15 +2247,16 @@ def test_pm_create_kanban_workflow_allows_multi_architect_design_phase_without_p
     result = json.loads(pm.pm_create_kanban_workflow(
         request="인증/사용자 API 설계 단계",
         tasks=[
-            {"key": "T1", "title": "요구사항 및 영향 범위 분석", "body": "현재 인증/사용자 흐름을 분석한다.", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "API/도메인 설계안 작성", "body": "상세 설계안을 작성한다.", "assignee": "backend-specialist", "mode": "architect", "parents": ["T1"]},
+            {"key": "T1", "title": "요구사항 및 영향 범위 분석", "body": "현재 인증/사용자 흐름을 분석한다.", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "API/도메인 설계안 작성", "body": "상세 설계안을 작성한다.", "assignee": "backend-architect", "mode": "architect", "parents": ["T1"]},
         ],
         project_path=str(workspace),
     ))
     assert result["ok"] is True
     created = {item["key"]: item for item in result["created_tasks"]}
     assert set(created) == {"T1", "T2"}
-    assert created["T1"]["assignee"] == "backend-specialist"
+    assert created["T1"]["assignee"] == "backend-architect"
+    assert created["T2"]["assignee"] == "backend-architect"
     assert created["T2"]["parents"] == [created["T1"]["task_id"]]
 
 
@@ -2261,8 +2268,8 @@ def test_pm_execute_plan_allows_design_phase_with_multiple_architect_tasks(herme
         summary="인증/사용자 API 확장",
         plan_kind="design",
         tasks=[
-            {"key": "T1", "title": "요구사항 및 영향 범위 분석", "body": "현재 인증/사용자 흐름을 분석한다.", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "API/도메인 설계안 작성", "body": "상세 설계안을 작성한다.", "assignee": "backend-specialist", "mode": "architect", "parents": ["T1"]},
+            {"key": "T1", "title": "요구사항 및 영향 범위 분석", "body": "현재 인증/사용자 흐름을 분석한다.", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "API/도메인 설계안 작성", "body": "상세 설계안을 작성한다.", "assignee": "backend-architect", "mode": "architect", "parents": ["T1"]},
         ],
         project_path=str(workspace),
     ))
@@ -2281,8 +2288,8 @@ def test_pm_create_plan_rejects_execution_plan_without_design_artifact_reference
         summary="execution plan requires approved design reference",
         plan_kind="execution",
         tasks=[
-            {"key": "T1", "title": "implementer", "body": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": []},
-            {"key": "T2", "title": "reviewer", "body": "review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "implementer", "body": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": []},
+            {"key": "T2", "title": "reviewer", "body": "review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T3", "title": "final", "body": "report", "assignee": "project_manager", "parents": ["T2"]},
         ],
         contract={
@@ -2305,9 +2312,9 @@ def test_pm_create_plan_rejects_execution_plan_with_architect_task(hermes_home, 
         summary="execution plan cannot own architect phase",
         plan_kind="execution",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "mapping", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "body": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "body": "review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "body": "mapping", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "body": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "body": "review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "body": "report", "assignee": "project_manager", "parents": ["T3"]},
         ],
         contract={
@@ -2327,8 +2334,8 @@ def test_execution_plan_contract_uses_explicit_design_artifact_reference(tmp_pat
         "plan_execution_kind_contract",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": []},
-            {"key": "T2", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": []},
+            {"key": "T2", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T3", "title": "final", "assignee": "project_manager", "parents": ["T2"]},
         ],
         plan_kind="execution",
@@ -2363,8 +2370,8 @@ def test_pm_create_plan_rejects_execution_plan_when_design_artifact_code_family_
         summary="design artifact와 다른 코드 family를 scope로 내보내면 안 된다",
         plan_kind="execution",
         tasks=[
-            {"key": "T1", "title": "implementer", "body": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": []},
-            {"key": "T2", "title": "reviewer", "body": "review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "implementer", "body": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": []},
+            {"key": "T2", "title": "reviewer", "body": "review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T3", "title": "final", "body": "report", "assignee": "project_manager", "parents": ["T2"]},
         ],
         contract={
@@ -2386,7 +2393,7 @@ def test_export_approved_scope_rejects_unknown_phase(tmp_path):
         "plan_invalid_phase_export",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
         ],
         plan_kind="design",
         design_status="approved",
@@ -2405,8 +2412,8 @@ def test_export_approved_scope_requires_design_approval_for_implementer_phase(tm
         "plan_missing_design_approval_export",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": []},
-            {"key": "T2", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": []},
+            {"key": "T2", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T3", "title": "final", "assignee": "project_manager", "parents": ["T2"]},
         ],
         plan_kind="execution",
@@ -2429,8 +2436,8 @@ def test_export_approved_scope_rejects_implementer_phase_without_concrete_allowe
         "plan_export_docs_only_scope",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": []},
-            {"key": "T2", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": []},
+            {"key": "T2", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T3", "title": "final", "assignee": "project_manager", "parents": ["T2"]},
         ],
         plan_kind="execution",
@@ -2459,8 +2466,8 @@ def test_export_approved_scope_requires_non_empty_required_evidence_for_implemen
         "plan_export_missing_required_evidence",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "implementer", "assignee": "backend-specialist", "mode": "implementer", "parents": []},
-            {"key": "T2", "title": "reviewer", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "implementer", "assignee": "backend-implementer", "mode": "implementer", "parents": []},
+            {"key": "T2", "title": "reviewer", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T3", "title": "final", "assignee": "project_manager", "parents": ["T2"]},
         ],
         plan_kind="execution",
@@ -2490,7 +2497,7 @@ def test_pm_create_plan_rejects_mapping_plan_without_source_plan_id(hermes_home,
         summary="mapping plan requires approved source",
         plan_kind="mapping",
         tasks=[
-            {"key": "T1", "title": "mapping architect", "body": "map approved design to files", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "mapping architect", "body": "map approved design to files", "assignee": "backend-architect", "mode": "architect", "parents": []},
         ],
         project_path=str(workspace),
     ))
@@ -2506,7 +2513,7 @@ def test_pm_create_plan_rejects_mapping_plan_with_implementer_task(hermes_home, 
         "plan_design_source",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
         ],
         plan_kind="design",
         status="awaiting_design_approval",
@@ -2523,8 +2530,8 @@ def test_pm_create_plan_rejects_mapping_plan_with_implementer_task(hermes_home, 
         summary="mapping plan must stay architect-only",
         plan_kind="mapping",
         tasks=[
-            {"key": "T1", "title": "mapping architect", "body": "map approved design to files", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "body": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T1", "title": "mapping architect", "body": "map approved design to files", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "body": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
         ],
         contract={"source_plan_id": "plan_design_source"},
         project_path=str(workspace),
@@ -2541,7 +2548,7 @@ def test_pm_create_plan_rejects_execution_plan_with_unapproved_source_plan(herme
         "plan_unapproved_design_source",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
         ],
         plan_kind="design",
         status="awaiting_approval",
@@ -2556,8 +2563,8 @@ def test_pm_create_plan_rejects_execution_plan_with_unapproved_source_plan(herme
         summary="execution should reject unapproved source plan",
         plan_kind="execution",
         tasks=[
-            {"key": "T1", "title": "implementer", "body": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": []},
-            {"key": "T2", "title": "reviewer", "body": "review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "implementer", "body": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": []},
+            {"key": "T2", "title": "reviewer", "body": "review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T3", "title": "final", "body": "report", "assignee": "project_manager", "parents": ["T2"]},
         ],
         contract={"source_plan_id": "plan_unapproved_design_source"},
@@ -2575,7 +2582,7 @@ def test_execution_plan_inherits_design_and_implementation_scope_from_mapping_so
         "plan_mapping_source",
         str(workspace),
         tasks=[
-            {"key": "T1", "title": "mapping architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "mapping architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
         ],
         plan_kind="mapping",
         status="awaiting_design_approval",
@@ -2599,8 +2606,8 @@ def test_execution_plan_inherits_design_and_implementation_scope_from_mapping_so
         summary="execution plan should inherit mapping scope",
         plan_kind="execution",
         tasks=[
-            {"key": "T1", "title": "implementer", "body": "implement approved mapping", "assignee": "backend-specialist", "mode": "implementer", "parents": []},
-            {"key": "T2", "title": "reviewer", "body": "review approved mapping", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "implementer", "body": "implement approved mapping", "assignee": "backend-implementer", "mode": "implementer", "parents": []},
+            {"key": "T2", "title": "reviewer", "body": "review approved mapping", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T3", "title": "final", "body": "report", "assignee": "project_manager", "parents": ["T2"]},
         ],
         contract={"source_plan_id": "plan_mapping_source"},
@@ -2623,9 +2630,9 @@ def test_pm_create_plan_rejects_code_reviewer_contract_without_concrete_implemen
         request="Update src/Orders/OrderDetailService.cs and validate the contract.",
         summary="bad code review contract",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "implementer", "body": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T1"]},
-            {"key": "T3", "title": "reviewer", "body": "code review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T2"]},
+            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "implementer", "body": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T1"]},
+            {"key": "T3", "title": "reviewer", "body": "code review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T2"]},
             {"key": "T4", "title": "final", "body": "report", "assignee": "project_manager", "parents": ["T3"]},
         ],
         contract={
@@ -2645,10 +2652,10 @@ def test_pm_create_plan_rejects_design_approval_pm_task_reused_as_final(hermes_h
         request="Implement bracket validator at algorithms/bracket_validator.py.",
         summary="pm final misclassification",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-architect", "mode": "architect", "parents": []},
             {"key": "T2", "title": "design approval request", "body": "summarize design for user approval", "assignee": "project_manager", "parents": ["T1"]},
-            {"key": "T3", "title": "implementer", "body": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T2"]},
-            {"key": "T4", "title": "reviewer", "body": "review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T3"]},
+            {"key": "T3", "title": "implementer", "body": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T2"]},
+            {"key": "T4", "title": "reviewer", "body": "review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T3"]},
         ],
         contract={"expected_deliverables": ["algorithms/bracket_validator.py"]},
         project_path=str(workspace),
@@ -2660,11 +2667,11 @@ def test_pm_create_plan_rejects_design_approval_pm_task_reused_as_final(hermes_h
 
 def test_final_phase_task_keys_skip_preimplementation_pm_summary_with_downstream_work():
     tasks = [
-        {"key": "T1", "title": "architect", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-        {"key": "T2", "title": "design review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+        {"key": "T1", "title": "architect", "assignee": "backend-architect", "mode": "architect", "parents": []},
+        {"key": "T2", "title": "design review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
         {"key": "T3", "title": "Final PM synthesis after reviewer output", "assignee": "project_manager", "parents": ["T2"]},
-        {"key": "T4", "title": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T3"]},
-        {"key": "T5", "title": "review impl", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T4"]},
+        {"key": "T4", "title": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T3"]},
+        {"key": "T5", "title": "review impl", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T4"]},
         {"key": "T6", "title": "true final", "assignee": "project_manager", "parents": ["T5"]},
     ]
     assert pm._final_phase_task_keys(tasks, ["src/Auth/LoginService.cs"]) == ["T6"]
@@ -2677,11 +2684,11 @@ def test_pm_create_plan_rejects_nonterminal_pm_task_marked_final_synthesis(herme
         request="Extend existing login sample at src/Auth/LoginService.cs.",
         summary="bad explicit PM phase",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-specialist", "mode": "architect", "parents": []},
-            {"key": "T2", "title": "review design", "body": "review", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T1"]},
+            {"key": "T1", "title": "architect", "body": "design", "assignee": "backend-architect", "mode": "architect", "parents": []},
+            {"key": "T2", "title": "review design", "body": "review", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T1"]},
             {"key": "T3", "title": "premature final", "body": "summary", "assignee": "project_manager", "pm_phase": "final_synthesis", "parents": ["T2"]},
-            {"key": "T4", "title": "implement", "body": "implement", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T3"]},
-            {"key": "T5", "title": "review impl", "body": "review impl", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T4"]},
+            {"key": "T4", "title": "implement", "body": "implement", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T3"]},
+            {"key": "T5", "title": "review impl", "body": "review impl", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T4"]},
             {"key": "T6", "title": "real final", "body": "close", "assignee": "project_manager", "pm_phase": "final_synthesis", "terminal_task": True, "parents": ["T5"]},
         ],
         contract={"expected_deliverables": ["src/Auth/LoginService.cs"]},
@@ -2697,7 +2704,7 @@ def test_pm_create_kanban_workflow_writes_detailed_korean_implementer_body(herme
     result = json.loads(pm.pm_create_kanban_workflow(
         request="기존 로그인 샘플의 src/Auth/LoginService.cs와 tests/Auth.Tests/LoginServiceTests.cs를 수정해 비밀번호 변경 기능을 추가한다.",
         tasks=[
-            {"key": "T1", "title": "구현", "body": "src/Auth/LoginService.cs와 tests/Auth.Tests/LoginServiceTests.cs를 수정해 비밀번호 변경 기능을 구현한다.", "assignee": "backend-specialist", "mode": "implementer", "parents": []},
+            {"key": "T1", "title": "구현", "body": "src/Auth/LoginService.cs와 tests/Auth.Tests/LoginServiceTests.cs를 수정해 비밀번호 변경 기능을 구현한다.", "assignee": "backend-implementer", "mode": "implementer", "parents": []},
         ],
         project_path=str(workspace),
     ))
@@ -2721,9 +2728,9 @@ def test_pm_create_kanban_workflow_writes_detailed_korean_pm_design_gate_body(he
     result = json.loads(pm.pm_create_kanban_workflow(
         request="비밀번호 변경 기능 설계 후 사용자 승인 게이트를 거친다.",
         tasks=[
-            {"key": "T1", "title": "설계", "body": "src/Auth/LoginService.cs 기준으로 설계를 작성한다.", "assignee": "backend-specialist", "mode": "architect", "parents": []},
+            {"key": "T1", "title": "설계", "body": "src/Auth/LoginService.cs 기준으로 설계를 작성한다.", "assignee": "backend-architect", "mode": "architect", "parents": []},
             {"key": "T2", "title": "설계 승인 요약", "body": "설계 결과를 요약하고 사용자 승인 판단 포인트를 정리한다.", "assignee": "project_manager", "parents": ["T1"]},
-            {"key": "T3", "title": "구현", "body": "승인 후 구현한다.", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T2"]},
+            {"key": "T3", "title": "구현", "body": "승인 후 구현한다.", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T2"]},
         ],
         project_path=str(workspace),
     ))
@@ -2752,10 +2759,10 @@ def test_staged_workflow_full_path_reaches_completed_with_real_scope_exports(her
         request="docs-only staged workflow full e2e",
         summary="staged workflow full e2e smoke",
         tasks=[
-            {"key": "T1", "title": "architect", "body": "write design", "assignee": "backend-specialist", "mode": "architect"},
+            {"key": "T1", "title": "architect", "body": "write design", "assignee": "backend-architect", "mode": "architect"},
             {"key": "T2", "title": "설계 승인 게이트 확인 및 구현 진행 관리", "body": "wait for user approval then release implementation", "assignee": "project_manager", "parents": ["T1"]},
-            {"key": "T3", "title": "implementer", "body": "implement approved change", "assignee": "backend-specialist", "mode": "implementer", "parents": ["T2"]},
-            {"key": "T4", "title": "문서 변경 검토 및 제약 준수 확인", "body": "verify approved change", "assignee": "backend-specialist", "mode": "reviewer", "parents": ["T3"]},
+            {"key": "T3", "title": "implementer", "body": "implement approved change", "assignee": "backend-implementer", "mode": "implementer", "parents": ["T2"]},
+            {"key": "T4", "title": "문서 변경 검토 및 제약 준수 확인", "body": "verify approved change", "assignee": "backend-reviewer", "mode": "reviewer", "parents": ["T3"]},
             {"key": "T5", "title": "최종 결과 정리 및 사용자 보고", "body": "report final result", "assignee": "project_manager", "parents": ["T4"]},
         ],
         contract={

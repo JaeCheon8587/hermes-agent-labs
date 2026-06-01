@@ -64,6 +64,62 @@ def test_runner_executes_command_with_prompt_and_writes_manifest(tmp_path):
     assert Path(data["stdout_path"]).is_file()
 
 
+def test_architect_runner_composes_claude_prompt_from_pm_envelope(tmp_path):
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    envelope = workdir / ".soul" / "prompts" / "plan_1_t_architect.md"
+    envelope.parent.mkdir(parents=True)
+    envelope.write_text(
+        "# Architect Task Envelope\n\n"
+        "이 파일은 Claude Code 실행 프롬프트가 아니다. architect runner가 실제 Claude prompt를 작성한다.\n\n"
+        "## Original user request\n"
+        "GET /books API 설계. title/author/availability 응답, 빈 목록 200 + [], 오류 정책 포함.\n\n"
+        "## Task body\n"
+        "src Host/Application/Infrastructure 구조를 보고 설계만 한다.\n",
+        encoding="utf-8",
+    )
+    artifact = workdir / ".soul" / "artifacts" / "design" / "plan_1_design.md"
+    manifest = workdir / ".soul" / "artifacts" / "claude" / "plan_1_t_architect_manifest.json"
+    captured = workdir / "captured_stdin.txt"
+    valid = _valid_architect_artifact()
+    script = workdir / "capture_then_emit.py"
+    script.write_text(
+        "import sys\n"
+        f"from pathlib import Path\nPath({str(captured)!r}).write_text(sys.stdin.read(), encoding='utf-8')\n"
+        "print(" + repr(valid) + ")\n",
+        encoding="utf-8",
+    )
+
+    result = runner.run_delegation(
+        mode="architect",
+        plan_id="plan_1",
+        task_id="t_architect",
+        workdir=str(workdir),
+        command=f"python3 {script}",
+        prompt_file=str(envelope),
+        output_format="design",
+        artifact_path=str(artifact),
+        manifest_path=str(manifest),
+        readonly=True,
+        timeout=30,
+    )
+
+    assert result["ok"] is True
+    stdin_prompt = captured.read_text(encoding="utf-8")
+    assert "# Claude Code Architect Delegation Prompt" in stdin_prompt
+    assert "[PM 작업 지시 envelope]" in stdin_prompt
+    assert "# Architect Task Envelope" in stdin_prompt
+    assert "[인터페이스 계약]" in stdin_prompt
+    assert "[엣지 케이스]" in stdin_prompt
+    assert "[아키텍처 컨텍스트]" in stdin_prompt
+    assert "[대안 비교]" in stdin_prompt
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert data["prompt_file"] == ".soul/prompts/plan_1_t_architect.md"
+    assert data["prompt_composition"] == "architect_runner"
+    assert data["composed_prompt_file"] == ".soul/prompts/internal/plan_1_t_architect_architect_composed.md"
+    assert (workdir / data["composed_prompt_file"]).read_text(encoding="utf-8") == stdin_prompt
+
+
 def test_runner_records_failed_command_without_successful_status(tmp_path):
     workdir = tmp_path / "project"
     workdir.mkdir()
@@ -144,6 +200,62 @@ def test_architect_artifact_repair_succeeds_on_first_retry(tmp_path):
     assert data["artifact_repair"]["ok"] is True
     assert len(data["artifact_repair"]["attempts"]) == 1
     assert (artifact.parent / "plan_design.failed0.md").is_file()
+
+
+def test_architect_repair_prompt_uses_composed_prompt_and_gate_errors(tmp_path):
+    workdir = tmp_path / "project"
+    workdir.mkdir()
+    envelope = workdir / ".soul" / "prompts" / "plan_repair_t_arch.md"
+    envelope.parent.mkdir(parents=True)
+    envelope.write_text(
+        "# Architect Task Envelope\n\n"
+        "이 파일은 Claude Code 실행 프롬프트가 아니다. architect runner가 실제 Claude prompt를 작성한다.\n\n"
+        "## Original user request\n"
+        "GET /books API 설계. 빈 목록과 오류 정책을 포함한다.\n\n"
+        "## Task body\n"
+        "src Host/Application 구조를 보고 설계만 한다.\n",
+        encoding="utf-8",
+    )
+    artifact = workdir / ".soul" / "artifacts" / "design" / "plan_repair_design.md"
+    manifest = workdir / ".soul" / "artifacts" / "claude" / "plan_repair_t_architect_manifest.json"
+    capture_dir = workdir / "captures"
+    capture_dir.mkdir()
+    script = workdir / "capture_counting_runner.py"
+    script.write_text(
+        "from pathlib import Path\n"
+        "import sys\n"
+        f"capture_dir = Path({str(capture_dir)!r})\n"
+        "state = capture_dir / 'count.txt'\n"
+        "count = int(state.read_text()) if state.exists() else 0\n"
+        "state.write_text(str(count + 1))\n"
+        "(capture_dir / f'stdin_{count}.txt').write_text(sys.stdin.read(), encoding='utf-8')\n"
+        f"outputs = {[ '작성 완료했습니다. 핵심 요약만 있습니다.', _valid_architect_artifact() ]!r}\n"
+        "print(outputs[count] if count < len(outputs) else outputs[-1])\n",
+        encoding="utf-8",
+    )
+
+    result = runner.run_delegation(
+        mode="architect", plan_id="plan_repair", task_id="t_architect", workdir=str(workdir),
+        command=f"python3 {script}", prompt_file=str(envelope), output_format="design",
+        artifact_path=str(artifact), manifest_path=str(manifest), readonly=True, timeout=30,
+    )
+
+    assert result["ok"] is True
+    initial_prompt = (capture_dir / "stdin_0.txt").read_text(encoding="utf-8")
+    repair_prompt = (capture_dir / "stdin_1.txt").read_text(encoding="utf-8")
+    assert "# Claude Code Architect Delegation Prompt" in initial_prompt
+    assert "# Architect Artifact Repair Prompt" in repair_prompt
+    assert "## 품질 게이트 결과" in repair_prompt
+    assert "## 복구 지시" in repair_prompt
+    assert "missing required headings" in repair_prompt
+    assert "first non-empty line must be `## 상태`" in repair_prompt
+    assert "작성 완료했습니다. 핵심 요약만 있습니다." in repair_prompt
+    assert "# Claude Code Architect Delegation Prompt" in repair_prompt
+    assert "[PM 작업 지시 envelope]" in repair_prompt
+    assert "GET /books API 설계" in repair_prompt
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert data["prompt_composition"] == "architect_runner"
+    assert data["artifact_repair"]["attempts"][0]["repair_prompt_path"] == ".soul/prompts/repair/plan_repair_t_architect_architect_repair1.md"
 
 
 def test_architect_artifact_repair_succeeds_on_second_retry(tmp_path):

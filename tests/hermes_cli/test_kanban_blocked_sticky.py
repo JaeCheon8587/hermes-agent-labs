@@ -1,30 +1,19 @@
-"""Regression tests for #28712 — kanban dispatcher must not auto-promote
-worker-initiated ``kanban_block`` (sticky blocks), but must keep
-auto-recovering circuit-breaker blocks.
+"""Regression tests for blocked Kanban tasks staying blocked until explicit recovery.
 
-The bug: when a worker called ``kanban_block(reason="review-required:
-...")`` to hand off to a human, the dispatcher's ``recompute_ready``
-would promote the task back to ``ready`` on the next tick.  The fresh
-worker found nothing to do (work already applied), exited cleanly, and
-got recorded as a ``protocol_violation`` → ``gave_up`` → promote → loop
-until manual intervention.
+The recurring bug class: a worker/runner put a task in ``blocked`` and the
+next dispatcher tick immediately promoted it back to ``ready`` because all
+parents were already done. That caused repeated respawn/timeout loops instead
+of a stable operator-actionable blocked state.
 
 These tests pin down:
 
 * Worker / operator-initiated blocks are sticky and survive
   ``recompute_ready``.
-* Circuit-breaker blocks (``gave_up`` event, status flipped via
-  ``_record_task_failure``) still auto-recover — the original intent
-  of #40c1decb3 is preserved.
-* An explicit ``kanban_unblock`` clears the sticky state.
-* The full block → promote → crash → ``gave_up`` loop is broken after
-  this fix: subsequent ticks leave the task blocked.
-
-The tangentially related schema-init ordering bug originally reported
-in #28712 (``init_db`` crashing on legacy DBs that pre-dated the
-``session_id`` migration) is covered separately by
-``test_kanban_db.py::test_connect_migrates_legacy_db_before_optional_column_indexes``,
-landed via #28754 / #28781 ahead of this fix.
+* Circuit-breaker ``gave_up`` blocks are also sticky; explicit
+  ``kanban_unblock`` is the recovery edge.
+* Legacy/direct DB blocks with no terminal event can still auto-recover.
+* The full block → promote → crash → ``gave_up`` loop is broken: subsequent
+  ticks leave the task blocked.
 """
 
 from __future__ import annotations
@@ -100,7 +89,7 @@ def test_worker_block_on_child_with_done_parents_is_still_sticky(kanban_home: Pa
 
 
 # ---------------------------------------------------------------------------
-# Circuit-breaker blocks still auto-recover (preserve #40c1decb3 intent)
+# Legacy/direct DB blocks can still auto-recover; gave_up is sticky
 # ---------------------------------------------------------------------------
 
 
@@ -132,11 +121,9 @@ def test_circuit_breaker_block_still_auto_promotes(kanban_home: Path) -> None:
         assert task.last_failure_error is None
 
 
-def test_gave_up_event_alone_does_not_make_block_sticky(kanban_home: Path) -> None:
-    """The circuit-breaker emits ``gave_up`` (not ``blocked``).  Make
-    sure ``_has_sticky_block`` doesn't accidentally treat ``gave_up``
-    as sticky — otherwise we'd regress the safety net for genuinely
-    transient crashes."""
+def test_gave_up_event_makes_block_sticky_until_unblocked(kanban_home: Path) -> None:
+    """A circuit-breaker ``gave_up`` is an operator-actionable block.
+    The dispatcher must not immediately re-promote it on the next tick."""
     with kb.connect() as conn:
         parent = kb.create_task(conn, title="parent")
         child = kb.create_task(conn, title="child", parents=[parent])
@@ -155,7 +142,10 @@ def test_gave_up_event_alone_does_not_make_block_sticky(kanban_home: Path) -> No
         conn.commit()
 
         promoted = kb.recompute_ready(conn)
-        assert promoted == 1
+        assert promoted == 0
+        assert kb.get_task(conn, child).status == "blocked"
+
+        assert kb.unblock_task(conn, child)
         assert kb.get_task(conn, child).status == "ready"
 
 

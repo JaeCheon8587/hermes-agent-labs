@@ -191,6 +191,26 @@ def _blocked_count_for_task(conn: sqlite3.Connection, event: sqlite3.Row) -> int
     return int(row['cnt'] or 0)
 
 
+def _latest_architect_feedback(conn: sqlite3.Connection, task_id: str) -> str:
+    try:
+        row = conn.execute(
+            """
+            select body
+              from task_comments
+             where task_id = ?
+               and author = 'backend-architect'
+             order by created_at desc, id desc
+             limit 1
+            """,
+            (task_id,),
+        ).fetchone()
+    except sqlite3.DatabaseError:
+        return ""
+    if not row or not row['body']:
+        return ""
+    return str(row['body']).strip()
+
+
 def _format_message(
     board: str,
     event: sqlite3.Row,
@@ -198,6 +218,7 @@ def _format_message(
     phase: str,
     reason: str,
     blocked_count: int,
+    architect_feedback: str = "",
 ) -> str:
     workspace = f"{event['workspace_kind']} @ {event['workspace_path'] or ''}".strip()
     repeated = blocked_count >= REPEATED_BLOCK_THRESHOLD
@@ -222,6 +243,12 @@ def _format_message(
             '반복 블로킹 경고',
             f'- 이 task가 blocked 상태로 이동한 횟수가 {blocked_count}회입니다.',
             '- 같은 보완/언블록 루프가 해결되지 않는 것으로 보고, 사용자 확인 또는 PM 지시서 재작성 검토가 필요합니다.',
+        ])
+    if architect_feedback:
+        lines.extend([
+            '',
+            'Architect 피드백',
+            architect_feedback[:2000],
         ])
     lines.extend([
         '',
@@ -257,7 +284,8 @@ def main() -> int:
             continue
         reason = _reason_for_event(conn, event)
         blocked_count = _blocked_count_for_task(conn, event)
-        print(_format_message(board, event, plan_id, phase, reason, blocked_count))
+        architect_feedback = _latest_architect_feedback(conn, str(event['task_id']))
+        print(_format_message(board, event, plan_id, phase, reason, blocked_count, architect_feedback))
         board_state['last_event_id'] = max_event_id
         board_state['last_reported_at'] = _now()
         _atomic_write_json(STATE_PATH, state)

@@ -25,6 +25,7 @@ def notifier_module(tmp_path, monkeypatch):
     conn.execute('create table tasks (id text primary key, title text, assignee text, status text, workspace_kind text, workspace_path text)')
     conn.execute('create table task_events (id integer primary key autoincrement, task_id text, run_id integer, kind text, payload text, created_at integer)')
     conn.execute('create table task_runs (id integer primary key autoincrement, task_id text, outcome text, summary text, ended_at integer)')
+    conn.execute('create table task_comments (id integer primary key autoincrement, task_id text, author text, body text, created_at integer)')
     conn.commit()
     conn.close()
 
@@ -64,6 +65,16 @@ def _insert_block_event(db_path: Path, *, task_id: str, reason: str, created_at:
     conn.execute(
         'insert into task_runs(task_id,outcome,summary,ended_at) values(?,?,?,?)',
         (task_id, 'blocked', reason, created_at),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _insert_comment(db_path: Path, *, task_id: str, author: str, body: str, created_at: int = 111) -> None:
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        'insert into task_comments(task_id,author,body,created_at) values(?,?,?,?)',
+        (task_id, author, body, created_at),
     )
     conn.commit()
     conn.close()
@@ -187,6 +198,13 @@ def test_main_escalates_when_pm_task_blocks_three_times(notifier_module, capsys)
     _insert_block_event(db_path, task_id='t_repeat_blocked', reason='작업 지시서 보완 필요', created_at=111)
     _insert_block_event(db_path, task_id='t_repeat_blocked', reason='작업 지시서 보완 필요', created_at=222)
     _insert_block_event(db_path, task_id='t_repeat_blocked', reason='작업 지시서 보완 필요', created_at=333)
+    _insert_comment(
+        db_path,
+        task_id='t_repeat_blocked',
+        author='backend-architect',
+        body='[Architect 작업 지시서 보완 필요]\n\n누락 항목:\n- 승인 조건\n- 완료 조건',
+        created_at=333,
+    )
     _write_plans(plans_path, {
         'plan_repeat_blocked': {
             'plan_id': 'plan_repeat_blocked',
@@ -207,6 +225,9 @@ def test_main_escalates_when_pm_task_blocks_three_times(notifier_module, capsys)
     assert 'PM 긴급 보고: 작업이 3회 이상 반복 블로킹되었습니다.' in out
     assert '- Block count: 3' in out
     assert '반복 블로킹 경고' in out
+    assert 'Architect 피드백' in out
+    assert '누락 항목:' in out
+    assert '- 승인 조건' in out
     assert '사용자 확인 또는 PM 지시서 재작성 검토가 필요합니다' in out
     state = json.loads(state_path.read_text(encoding='utf-8'))
     assert state['boards']['testboard']['last_event_id'] == 3

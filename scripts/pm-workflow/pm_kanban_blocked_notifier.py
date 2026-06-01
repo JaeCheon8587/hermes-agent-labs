@@ -20,6 +20,7 @@ HERMES_HOME = Path(os.environ.get('HERMES_ROOT', str(Path.home() / '.hermes'))).
 PM_PLANS_PATH = HERMES_HOME / 'profiles' / 'project_manager' / 'state' / 'pm_plans.json'
 CURRENT_BOARD = HERMES_HOME / 'kanban' / 'current'
 STATE_PATH = HERMES_HOME / 'state' / 'pm_kanban_blocked_notifier.json'
+REPEATED_BLOCK_THRESHOLD = 3
 
 
 def _now() -> int:
@@ -174,24 +175,59 @@ def _reason_for_event(conn: sqlite3.Connection, event: sqlite3.Row) -> str:
     return '(reason unavailable)'
 
 
-def _format_message(board: str, event: sqlite3.Row, plan_id: str, phase: str, reason: str) -> str:
+def _blocked_count_for_task(conn: sqlite3.Connection, event: sqlite3.Row) -> int:
+    row = conn.execute(
+        """
+        select count(*) as cnt
+          from task_events
+         where task_id = ?
+           and kind = 'blocked'
+           and id <= ?
+        """,
+        (event['task_id'], int(event['id'])),
+    ).fetchone()
+    if not row:
+        return 0
+    return int(row['cnt'] or 0)
+
+
+def _format_message(
+    board: str,
+    event: sqlite3.Row,
+    plan_id: str,
+    phase: str,
+    reason: str,
+    blocked_count: int,
+) -> str:
     workspace = f"{event['workspace_kind']} @ {event['workspace_path'] or ''}".strip()
+    repeated = blocked_count >= REPEATED_BLOCK_THRESHOLD
+    title = 'PM 긴급 보고: 작업이 3회 이상 반복 블로킹되었습니다.' if repeated else 'PM 보고: 작업이 블로킹되었습니다.'
     lines = [
-        'PM 보고: 작업이 블로킹되었습니다.',
+        title,
         '',
         f'- Plan ID: {plan_id}',
         f"- Task ID: {event['task_id']}",
         f"- Task: {event['title']}",
         f"- Phase: {phase or '-'}",
         f"- Assignee: {event['assignee']}",
+        f"- Block count: {blocked_count}",
         f"- Reason: {reason}",
         f"- 감지 시각: {_fmt_ts(event['created_at'])}",
         f"- 보드: {board}",
         f"- 작업 경로: {workspace}",
+    ]
+    if repeated:
+        lines.extend([
+            '',
+            '반복 블로킹 경고',
+            f'- 이 task가 blocked 상태로 이동한 횟수가 {blocked_count}회입니다.',
+            '- 같은 보완/언블록 루프가 해결되지 않는 것으로 보고, 사용자 확인 또는 PM 지시서 재작성 검토가 필요합니다.',
+        ])
+    lines.extend([
         '',
         '다음 액션',
         '필요하면 이 채널에서 @PM으로 수정/재지시/언블록 요청을 보내세요.',
-    ]
+    ])
     return '\n'.join(lines).strip()
 
 
@@ -220,7 +256,8 @@ def main() -> int:
         if not plan_id:
             continue
         reason = _reason_for_event(conn, event)
-        print(_format_message(board, event, plan_id, phase, reason))
+        blocked_count = _blocked_count_for_task(conn, event)
+        print(_format_message(board, event, plan_id, phase, reason, blocked_count))
         board_state['last_event_id'] = max_event_id
         board_state['last_reported_at'] = _now()
         _atomic_write_json(STATE_PATH, state)

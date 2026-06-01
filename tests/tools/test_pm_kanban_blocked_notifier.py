@@ -179,3 +179,34 @@ def test_legacy_global_last_event_id_does_not_suppress_current_board(notifier_mo
     state = json.loads(state_path.read_text(encoding='utf-8'))
     assert state['last_event_id'] == 1900
     assert state['boards']['testboard']['last_event_id'] == 1
+
+
+def test_main_escalates_when_pm_task_blocks_three_times(notifier_module, capsys):
+    module, plans_path, state_path, db_path = notifier_module
+    _insert_task(db_path, task_id='t_repeat_blocked', title='도서 등록 API 설계', assignee='backend-architect')
+    _insert_block_event(db_path, task_id='t_repeat_blocked', reason='작업 지시서 보완 필요', created_at=111)
+    _insert_block_event(db_path, task_id='t_repeat_blocked', reason='작업 지시서 보완 필요', created_at=222)
+    _insert_block_event(db_path, task_id='t_repeat_blocked', reason='작업 지시서 보완 필요', created_at=333)
+    _write_plans(plans_path, {
+        'plan_repeat_blocked': {
+            'plan_id': 'plan_repeat_blocked',
+            'status': 'executed',
+            'project_path': '/tmp/workspace',
+            'tasks': [{'key': 'T1', 'mode': 'architect', 'title': '도서 등록 API 설계'}],
+            'created_design_tasks': [{'key': 'T1', 'task_id': 't_repeat_blocked', 'title': '도서 등록 API 설계', 'assignee': 'backend-architect'}],
+            'created_tasks': [{'key': 'T1', 'task_id': 't_repeat_blocked', 'title': '도서 등록 API 설계', 'assignee': 'backend-architect'}],
+        }
+    })
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(json.dumps({'initialized_at': 1, 'boards': {'testboard': {'last_event_id': 2}}}, ensure_ascii=False, indent=2), encoding='utf-8')
+
+    rc = module.main()
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    assert 'PM 긴급 보고: 작업이 3회 이상 반복 블로킹되었습니다.' in out
+    assert '- Block count: 3' in out
+    assert '반복 블로킹 경고' in out
+    assert '사용자 확인 또는 PM 지시서 재작성 검토가 필요합니다' in out
+    state = json.loads(state_path.read_text(encoding='utf-8'))
+    assert state['boards']['testboard']['last_event_id'] == 3
